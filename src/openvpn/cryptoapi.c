@@ -1,4 +1,5 @@
 /*
+ * Copyright (C) 2023 iamscottxu <scottxu@scottxublog.com>
  * Copyright (c) 2004 Peter 'Luna' Runestig <peter@runestig.com>
  * Copyright (c) 2018 Selva Nair <selva.nair@gmail.com>
  * All rights reserved.

@@ -27,7 +27,7 @@ BEGIN
         BLOCK "040904b0"
         BEGIN
             VALUE "CompanyName", "The OpenVPN Project"
-            VALUE "FileDescription", "OpenVPN Service"
+            VALUE "FileDescription", "GmVPN Service"
             VALUE "FileVersion", PACKAGE_VERSION ".0"
             VALUE "InternalName", "OpenVPN"
             VALUE "LegalCopyright", "Copyright © The OpenVPN Project" 

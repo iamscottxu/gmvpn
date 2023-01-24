@@ -1,4 +1,4 @@
-dnl  OpenVPN -- An application to securely tunnel IP networks
+dnl  GmVPN -- An application to securely tunnel IP networks
 dnl             over a single UDP port, with support for SSL/TLS-based
 dnl             session authentication and key exchange,
 dnl             packet encryption, packet authentication, and

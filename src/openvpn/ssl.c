@@ -1,10 +1,11 @@
 /*
- *  OpenVPN -- An application to securely tunnel IP networks
+ *  GmVPN -- An application to securely tunnel IP networks
  *             over a single TCP/UDP port, with support for SSL/TLS-based
  *             session authentication and key exchange,
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
+ *  Copyright (C) 2023 iamscottxu <scottxu@scottxublog.com>
  *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
  *  Copyright (C) 2010-2021 Fox Crypto B.V. <openvpn@foxcrypto.com>
  *  Copyright (C) 2008-2023 David Sommerseth <dazo@eurephia.org>

@@ -1,12 +1,24 @@
-OpenVPN (TM) -- An Open Source VPN daemon
+GmVPN -- An Open Source VPN daemon
 
+Copyright (C) 2023 iamscottxu <scottxu@scottxublog.com>
 Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
 
 This distribution contains multiple components, some
-of which fall under different licenses.  By using OpenVPN
+of which fall under different licenses. By using GmVPN
 or any of the bundled components enumerated below, you
 agree to be bound by the conditions of the license for
 each respective component.
+
+GmVPN license:
+--------------
+
+  GmVPN is forked from OpenVPN(TM), thus GmVPN applies multiple
+  licenses:
+  
+  a) code that forked from OpenVPN(TM) stays under OpenVPN(TM) license,
+     which are pasted at the bottom of this file;
+  b) completely new code stays under GPL license version 2, see the
+     COPYRIGHT.GPL file for reference.
 
 OpenVPN trademark
 -----------------
@@ -82,6 +94,16 @@ NSIS License:
   2. Altered versions must be plainly marked as such,
      and must not be misrepresented as being the original software.
   3. This notice may not be removed or altered from any distribution.
+
+Tongsuo(BabaSSL) License:
+-------------------------
+
+  BabaSSL is forked from OpenSSL 1.1.1, thus BabaSSL applies multiple licenses:
+
+a) code that forked from OpenSSL stays under OpenSSL license and SSLeay license,
+   which are pasted at the bottom of this file;
+b) completely new code stays under Apache 2.0 license, see the LICENSE file for
+   reference.
 
 OpenSSL License:
 ----------------
