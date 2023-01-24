@@ -65,6 +65,16 @@ tls_ctx_use_pkcs11(
     const char *const pkcs11_id
     );
 
+#ifdef USE_NTLS
+int
+tls_ctx_use_pkcs11_ntls(
+    struct tls_root_ctx* const ssl_ctx,
+    bool pkcs11_id_management,
+    const char* const sign_pkcs11_id,
+    const char* const enc_pkcs11_id
+);
+#endif /* ifdef USE_NTSL */
+
 void
 show_pkcs11_ids(
     const char *const provider,

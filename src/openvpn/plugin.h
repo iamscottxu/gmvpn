@@ -31,6 +31,9 @@
 #ifdef ENABLE_CRYPTO_OPENSSL
 #include "ssl_verify_openssl.h"
 #endif
+#ifdef ENABLE_CRYPTO_TONGSUO
+#include "ssl_verify_tongsuo.h"
+#endif
 #ifdef ENABLE_CRYPTO_MBEDTLS
 #include "ssl_verify_mbedtls.h"
 #endif

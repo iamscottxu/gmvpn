@@ -50,7 +50,11 @@
 #include <assert.h>
 
 #include "buffer.h"
+#ifdef ENABLE_CRYPTO_TONGSUO
+#include "tongsuo_compat.h"
+#else
 #include "openssl_compat.h"
+#endif
 #include "win32.h"
 #include "xkey_common.h"
 
@@ -170,8 +174,13 @@ cng_padding_type(int padding)
             break;
 
         default:
+#if defined(ENABLE_CRYPTO_TONGSUO)
+            msg(M_WARN|M_INFO, "cryptoapicert: unknown Tongsuo padding type %d.",
+                padding);
+#elif defined(ENABLE_CRYPTO_OPENSSL)
             msg(M_WARN|M_INFO, "cryptoapicert: unknown OpenSSL padding type %d.",
                 padding);
+#endif
     }
 
     return pad;
@@ -361,8 +370,13 @@ ecdsa_sign(int type, const unsigned char *dgst, int dgstlen, unsigned char *sig,
     return 1;
 }
 
+#ifdef USE_NTLS
+static int
+ssl_ctx_set_eckey(SSL_CTX* ssl_ctx, CAPI_DATA* cd, EVP_PKEY* pkey, bool sign_cert, bool enc_cert)
+#else
 static int
 ssl_ctx_set_eckey(SSL_CTX *ssl_ctx, CAPI_DATA *cd, EVP_PKEY *pkey)
+#endif /* ifdef USE_NTLS */
 {
     EC_KEY *ec = NULL;
     EVP_PKEY *privkey = NULL;
@@ -410,6 +424,23 @@ ssl_ctx_set_eckey(SSL_CTX *ssl_ctx, CAPI_DATA *cd, EVP_PKEY *pkey)
     }
     /* from here on ec will get freed with privkey */
 
+#ifdef USE_NTLS
+    if (sign_cert)
+    {
+        if (!SSL_CTX_use_sign_PrivateKey(ssl_ctx, privkey))
+        {
+            goto err;
+        }
+    }
+    else if (enc_cert)
+    {
+        if (!SSL_CTX_use_enc_PrivateKey(ssl_ctx, privkey))
+        {
+            goto err;
+        }
+    }
+    else
+#endif /* ifdef USE_NTLS */
     if (!SSL_CTX_use_PrivateKey(ssl_ctx, privkey))
     {
         goto err;
@@ -706,8 +737,13 @@ pkey_rsa_sign(EVP_PKEY_CTX *ctx, unsigned char *sig, size_t *siglen,
     return (*siglen == 0) ? 0 : 1;
 }
 
+#ifdef USE_NTLS
+static int
+ssl_ctx_set_rsakey(SSL_CTX *ssl_ctx, CAPI_DATA *cd, EVP_PKEY *pkey, bool sign_cert, bool enc_cert)
+#else
 static int
 ssl_ctx_set_rsakey(SSL_CTX *ssl_ctx, CAPI_DATA *cd, EVP_PKEY *pkey)
+#endif /* ifdef USE_NTLS */
 {
     RSA *rsa = NULL;
     RSA_METHOD *my_rsa_method = NULL;
@@ -759,7 +795,25 @@ ssl_ctx_set_rsakey(SSL_CTX *ssl_ctx, CAPI_DATA *cd, EVP_PKEY *pkey)
     }
     rsa = NULL; /* privkey has taken ownership */
 
+#ifdef USE_NTLS
+    if (sign_cert)
+    {
+        if (!SSL_CTX_use_sign_PrivateKey(ssl_ctx, privkey))
+        {
+            goto cleanup;
+        }
+    } 
+    else if (enc_cert) 
+    {
+        if (!SSL_CTX_use_enc_PrivateKey(ssl_ctx, privkey))
+        {
+            goto cleanup;
+        }
+    }
+    else
+#else
     if (!SSL_CTX_use_PrivateKey(ssl_ctx, privkey))
+#endif
     {
         goto cleanup;
     }
@@ -934,8 +988,13 @@ xkey_cng_sign(void *handle, unsigned char *sig, size_t *siglen, const unsigned c
 
 #endif /* HAVE_XKEY_PROVIDER */
 
+#ifdef USE_NTLS
 int
-SSL_CTX_use_CryptoAPI_certificate(SSL_CTX *ssl_ctx, const char *cert_prop)
+SSL_CTX_use_CryptoAPI_certificate_inner(SSL_CTX *ssl_ctx, const char *cert_prop, bool sign_cert, bool enc_cert)
+#else
+int
+SSL_CTX_use_CryptoAPI_certificate_inner(SSL_CTX *ssl_ctx, const char *cert_prop)
+#endif /* ifdef USE_NTLS */
 {
     HCERTSTORE cs;
     X509 *cert = NULL;
@@ -969,6 +1028,13 @@ SSL_CTX_use_CryptoAPI_certificate(SSL_CTX *ssl_ctx, const char *cert_prop)
         CertCloseStore(cs, 0);
         if (cd->cert_context == NULL)
         {
+#ifdef USE_NTLS
+            if (sign_cert)
+                msg(M_NONFATAL, "Error in cryptoapicert: signature certificate matching <%s> not found", cert_prop);
+            else if (enc_cert)
+                msg(M_NONFATAL, "Error in cryptoapicert: encryption certificate matching <%s> not found", cert_prop);
+            else
+#endif /* ifdef USE_NTLS */
             msg(M_NONFATAL, "Error in cryptoapicert: certificate matching <%s> not found", cert_prop);
             goto err;
         }
@@ -979,6 +1045,13 @@ SSL_CTX_use_CryptoAPI_certificate(SSL_CTX *ssl_ctx, const char *cert_prop)
                     cd->cert_context->cbCertEncoded);
     if (cert == NULL)
     {
+#ifdef USE_NTLS
+        if (sign_cert)
+            msg(M_NONFATAL, "Error in cryptoapicert: X509 signature certificate decode failed");
+        else if (enc_cert)
+            msg(M_NONFATAL, "Error in cryptoapicert: X509 encryption certificate decode failed");
+        else
+#endif /* ifdef USE_NTLS */
         msg(M_NONFATAL, "Error in cryptoapicert: X509 certificate decode failed");
         goto err;
     }
@@ -998,6 +1071,23 @@ SSL_CTX_use_CryptoAPI_certificate(SSL_CTX *ssl_ctx, const char *cert_prop)
 
     /* Public key in cert is NULL until we call SSL_CTX_use_certificate(),
      * so we do it here then...  */
+#ifdef USE_NTLS
+    if (sign_cert) 
+    {
+        if (!SSL_CTX_use_sign_certificate(ssl_ctx, cert))
+        {
+            goto err;
+        }
+    }
+    else if(enc_cert)
+    {
+        if (!SSL_CTX_use_enc_certificate(ssl_ctx, cert))
+        {
+            goto err;
+        }
+    }
+    else
+#endif /* ifdef USE_NTLS */
     if (!SSL_CTX_use_certificate(ssl_ctx, cert))
     {
         goto err;
@@ -1005,6 +1095,16 @@ SSL_CTX_use_CryptoAPI_certificate(SSL_CTX *ssl_ctx, const char *cert_prop)
 
     /* the public key */
     EVP_PKEY *pkey = X509_get_pubkey(cert);
+
+#ifndef OPENSSL_NO_SM2
+    if (pkey && EVP_PKEY_is_sm2(pkey)) {
+        if (!EVP_PKEY_set_alias_type(pkey, EVP_PKEY_SM2)) {
+            msg(M_NONFATAL | M_ERRNO, "Error in cryptoapicert: failed to set sm2 alias type");
+            goto err;
+        }
+    }
+#endif
+
     cd->pubkey = pkey; /* will be freed with cd */
 
     /* SSL_CTX_use_certificate() increased the reference count in 'cert', so
@@ -1016,6 +1116,13 @@ SSL_CTX_use_CryptoAPI_certificate(SSL_CTX *ssl_ctx, const char *cert_prop)
 
     EVP_PKEY *privkey = xkey_load_generic_key(tls_libctx, cd, pkey,
                                               xkey_cng_sign, (XKEY_PRIVKEY_FREE_fn *) CAPI_DATA_free);
+#ifdef USE_NTLS
+    if (sign_cert)
+        SSL_CTX_use_sign_PrivateKey(ssl_ctx, privkey);
+    else  if (enc_cert)
+        SSL_CTX_use_enc_PrivateKey(ssl_ctx, privkey);
+    else
+#endif /* ifdef USE_NTLS */
     SSL_CTX_use_PrivateKey(ssl_ctx, privkey);
     return 1; /* do not free cd -- its kept by xkey provider */
 
@@ -1023,14 +1130,26 @@ SSL_CTX_use_CryptoAPI_certificate(SSL_CTX *ssl_ctx, const char *cert_prop)
 
     if (EVP_PKEY_id(pkey) == EVP_PKEY_RSA)
     {
+#ifdef USE_NTLS
+        if (!ssl_ctx_set_rsakey(ssl_ctx, cd, pkey, sign_cert, enc_cert))
+#else
         if (!ssl_ctx_set_rsakey(ssl_ctx, cd, pkey))
+#endif /* ifdef USE_NTLS */
         {
             goto err;
         }
     }
+#ifndef OPENSSL_NO_SM2
+    else if (EVP_PKEY_id(pkey) == EVP_PKEY_EC || EVP_PKEY_id(pkey) == EVP_PKEY_SM2)
+#else
     else if (EVP_PKEY_id(pkey) == EVP_PKEY_EC)
+#endif
     {
+#ifdef USE_NTLS
+        if (!ssl_ctx_set_eckey(ssl_ctx, cd, pkey, sign_cert, enc_cert))
+#else
         if (!ssl_ctx_set_eckey(ssl_ctx, cd, pkey))
+#endif /* ifdef USE_NTLS */
         {
             goto err;
         }
@@ -1050,4 +1169,32 @@ err:
     CAPI_DATA_free(cd);
     return 0;
 }
+
+int
+SSL_CTX_use_CryptoAPI_certificate(SSL_CTX* ssl_ctx, const char* cert_prop)
+{
+#ifdef USE_NTLS
+    return SSL_CTX_use_CryptoAPI_certificate_inner(ssl_ctx, cert_prop, false, false);
+#else
+    return SSL_CTX_use_CryptoAPI_certificate_inner(ssl_ctx, cert_prop);
+#endif /* ifdef USE_NTLS */
+}
+
+#ifdef USE_NTLS
+int
+SSL_CTX_use_CryptoAPI_certificate_ntls(SSL_CTX* ssl_ctx, const char* sign_cert_prop, const char* enc_cert_prop)
+{
+    int ret = 0;
+    if ((ret = SSL_CTX_use_CryptoAPI_certificate_inner(ssl_ctx, sign_cert_prop, true, false)) != 0)
+    {
+        return ret;
+    }
+    if ((ret = SSL_CTX_use_CryptoAPI_certificate_inner(ssl_ctx, enc_cert_prop, false, true)) != 0)
+    {
+        return ret;
+    }
+    return 0;
+}
+#endif /* ifdef USE_NTLS */
+
 #endif                          /* _WIN32 */

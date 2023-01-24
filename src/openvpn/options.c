@@ -74,11 +74,16 @@ const char title_string[] =
     " " TARGET_ALIAS
 #if defined(ENABLE_CRYPTO_MBEDTLS)
     " [SSL (mbed TLS)]"
+#elif defined(ENABLE_CRYPTO_TONGSUO)
+    " [SSL (Tongsuo)]"
 #elif defined(ENABLE_CRYPTO_OPENSSL)
     " [SSL (OpenSSL)]"
 #else
     " [SSL]"
 #endif /* defined(ENABLE_CRYPTO_MBEDTLS) */
+#ifdef USE_NTLS
+    " [NTLS]"
+#endif /* ifdef USE_NTLS */
 #ifdef USE_COMP
 #ifdef ENABLE_LZO
     " [LZO]"
@@ -547,7 +552,9 @@ static const char usage_message[] =
     "                  You should usually use --data-ciphers instead.\n"
     "                  Set alg=none to disable encryption.\n"
     "--data-ciphers list : List of ciphers that are allowed to be negotiated.\n"
-#ifndef ENABLE_CRYPTO_MBEDTLS
+#if defined(ENABLE_CRYPTO_TONGSUO)
+    "--engine [name] : Enable Tongsuo hardware crypto engine functionality.\n"
+#elif defined(ENABLE_CRYPTO_OPENSSL)
     "--engine [name] : Enable OpenSSL hardware crypto engine functionality.\n"
 #endif
     "--no-replay     : (DEPRECATED) Disable replay protection.\n"
@@ -568,6 +575,9 @@ static const char usage_message[] =
     "(These options are meaningful only for TLS-mode)\n"
     "--tls-server    : Enable TLS and assume server role during TLS handshake.\n"
     "--tls-client    : Enable TLS and assume client role during TLS handshake.\n"
+#ifdef USE_NTLS
+    "--use-ntls      : Enable NTLS protocol (GB/T 38636 TLCP).\n"
+#endif /* ifdef USE_NTLS */
     "--key-method m  : (DEPRECATED) Data channel key exchange method.  m should be a method\n"
     "                  number, such as 1 (default), 2, etc.\n"
     "--ca file       : Certificate authority file in .pem format containing\n"
@@ -576,20 +586,58 @@ static const char usage_message[] =
     "--capath dir    : A directory of trusted certificates (CAs"
     " and CRLs).\n"
 #endif /* ENABLE_CRYPTO_MBEDTLS */
+#ifdef USE_NTLS
+    "--dh file       : File containing Diffie Hellman parameters\n"
+    "                  in .pem format (for --tls-server only, NTLS disabled).\n"
+    "                  Use \"openssl dhparam -out dh1024.pem 1024\" to generate.\n"
+    "--cert file     : Local certificate in .pem format -- must be signed\n"
+    "                  by a Certificate Authority in --ca file (NTLS disabled).\n"
+    "--sign-cert file: Local signature certificate in .pem format -- must be signed\n"
+    "                  by a Certificate Authority in --ca file (NTLS enabled).\n"
+    "--enc-cert file : Local encryption certificate in .pem format -- must be signed\n"
+    "                  by a Certificate Authority in --ca file (NTLS enabled).\n"
+#else
     "--dh file       : File containing Diffie Hellman parameters\n"
     "                  in .pem format (for --tls-server only).\n"
     "                  Use \"openssl dhparam -out dh1024.pem 1024\" to generate.\n"
     "--cert file     : Local certificate in .pem format -- must be signed\n"
     "                  by a Certificate Authority in --ca file.\n"
+#endif /* ifdef USE_NTLS */
     "--extra-certs file : one or more PEM certs that complete the cert chain.\n"
+#ifdef USE_NTLS
+    "--key file      : Local private key in .pem format (NTLS disabled).\n"
+    "--sign-key file : Local signature private key in .pem format (NTLS enabled).\n"
+    "--enc-key file  : Local encryption private key in .pem format (NTLS enabled).\n"
+#else
     "--key file      : Local private key in .pem format.\n"
+#endif /* ifdef USE_NTLS */
+#ifdef USE_NTLS
+    "--tls-version-min <version> ['or-highest'] : sets the minimum TLS version we\n"
+    "    will accept from the peer.  If version is unrecognized and 'or-highest'\n"
+    "    is specified, require max TLS version supported by SSL implementation\n"
+    "    (NTLS disabled).\n"
+    "--tls-version-max <version> : sets the maximum TLS version we will use\n"
+    "    (NTLS disabled).\n"
+#else
     "--tls-version-min <version> ['or-highest'] : sets the minimum TLS version we\n"
     "    will accept from the peer.  If version is unrecognized and 'or-highest'\n"
     "    is specified, require max TLS version supported by SSL implementation.\n"
     "--tls-version-max <version> : sets the maximum TLS version we will use.\n"
+#endif /* ifdef USE_NTLS */
 #ifndef ENABLE_CRYPTO_MBEDTLS
+#ifdef USE_NTLS
+    "--pkcs12 file   : PKCS#12 file containing local private key, local certificate\n"
+    "                  and optionally the root CA certificate (NTLS disabled).\n"
+    "--sign-pkcs12 file : PKCS#12 file containing local signing private key,\n"
+    "                     local private certificate and optionally\n"
+    "                     the root CA certificate (NTLS enabled).\n"
+    "--enc-pkcs12 file  : PKCS#12 file containing local encryption private key,\n"
+    "                     local encryption certificate and optionally\n"
+    "                     the root CA certificate (NTLS enabled).\n"
+#else
     "--pkcs12 file   : PKCS#12 file containing local private key, local certificate\n"
     "                  and optionally the root CA certificate.\n"
+#endif /* ifdef USE_NTLS */
 #endif
 #ifdef ENABLE_X509ALTUSERNAME
     "--x509-username-field : Field in x509 certificate containing the username.\n"
@@ -598,15 +646,31 @@ static const char usage_message[] =
     "--verify-hash hash [algo] : Specify fingerprint for level-1 certificate.\n"
     "                            Valid algo flags are SHA1 and SHA256. \n"
 #ifdef _WIN32
+#ifdef USE_NTLS
+    "--cryptoapicert select-string : Load the certificate and private key from the\n"
+    "                  Windows Certificate System Store (NTLS disabled).\n"
+    "--cryptoapisigncert select-string : Load the signature certificate and private\n"
+    "                  key from the Windows Certificate System Store (NTLS enabled).\n"
+    "--cryptoapienccert select-string : Load the encryption certificate and private\n"
+    "                  key from the Windows Certificate System Store (NTLS enabled).\n"
+#else
     "--cryptoapicert select-string : Load the certificate and private key from the\n"
     "                  Windows Certificate System Store.\n"
+#endif /* ifdef USE_NTLS */
 #endif
     "--tls-cipher l  : A list l of allowable TLS ciphers separated by : (optional).\n"
+#ifdef USE_NTLS
+    "--ntls-cipher l : A list l of allowable NTLS ciphers separated by : (optional).\n"
+#endif /* ifdef USE_NTLS */
     "--tls-ciphersuites l: A list of allowed TLS 1.3 cipher suites seperated by : (optional)\n"
     "                : Use --show-tls to see a list of supported TLS ciphers (suites).\n"
     "--tls-cert-profile p : Set the allowed certificate crypto algorithm profile\n"
     "                  (default=legacy).\n"
+#if defined(ENABLE_CRYPTO_TONGSUO)
+    "--providers l   : A list l of Tongsuo providers to load.\n"
+#elif defined(ENABLE_CRYPTO_OPENSSL)
     "--providers l   : A list l of OpenSSL providers to load.\n"
+#endif
     "--tls-timeout n : Packet retransmit timeout on TLS control channel\n"
     "                  if no ACK from remote within n seconds (default=%d).\n"
     "--reneg-bytes n : Renegotiate data chan. key after n bytes sent and recvd.\n"
@@ -876,6 +940,9 @@ init_options(struct options *o, const bool init_gc)
 #ifdef ENABLE_PREDICTION_RESISTANCE
     o->use_prediction_resistance = false;
 #endif
+#ifdef USE_NTLS
+    o->use_ntls = false;
+#endif /* ifdef USE_NTLS */
     o->tls_timeout = 2;
     o->renegotiate_bytes = -1;
     o->renegotiate_seconds = 3600;
@@ -1957,6 +2024,9 @@ show_settings(const struct options *o)
 
     SHOW_BOOL(tls_server);
     SHOW_BOOL(tls_client);
+#ifdef USE_NTLS
+    SHOW_BOOL(use_ntls);
+#endif /* ifdef USE_NTLS */
     SHOW_STR_INLINE(ca_file);
     SHOW_STR(ca_path);
     SHOW_STR_INLINE(dh_file);
@@ -1969,6 +2039,24 @@ show_settings(const struct options *o)
 #endif
     SHOW_STR_INLINE(cert_file);
     SHOW_STR_INLINE(extra_certs_file);
+#ifdef USE_NTLS
+#ifdef ENABLE_MANAGEMENT
+    if ((o->management_flags & MF_EXTERNAL_CERT))
+    {
+        SHOW_PARM("sign_cert_file", "EXTERNAL_SIGN_CERT", "%s");
+    }
+    else
+#endif /* ifdef ENABLE_MANAGEMENT */
+    SHOW_STR_INLINE(sign_cert_file);
+#ifdef ENABLE_MANAGEMENT
+    if ((o->management_flags & MF_EXTERNAL_CERT))
+    {
+        SHOW_PARM("enc_cert_file", "EXTERNAL_ENC_CERT", "%s");
+    }
+    else
+#endif /* ifdef ENABLE_MANAGEMENT */
+    SHOW_STR_INLINE(enc_cert_file);
+#endif /* ifdef USE_NTLS */
 
 #ifdef ENABLE_MANAGEMENT
     if ((o->management_flags & MF_EXTERNAL_KEY))
@@ -1978,14 +2066,45 @@ show_settings(const struct options *o)
     else
 #endif
     SHOW_STR_INLINE(priv_key_file);
+#ifdef USE_NTLS
+#ifdef ENABLE_MANAGEMENT
+    if ((o->management_flags & MF_EXTERNAL_KEY))
+    {
+        SHOW_PARM("sign_priv_key_file", "EXTERNAL_SIGN_PRIVATE_KEY", "%s");
+    }
+    else
+#endif /* ifdef ENABLE_MANAGEMENT */
+    SHOW_STR_INLINE(sign_priv_key_file);
+#ifdef ENABLE_MANAGEMENT
+    if ((o->management_flags & MF_EXTERNAL_KEY))
+    {
+        SHOW_PARM("enc_priv_key_file", "EXTERNAL_ENC_PRIVATE_KEY", "%s");
+    }
+    else
+#endif /* ifdef ENABLE_MANAGEMENT */
+    SHOW_STR_INLINE(enc_priv_key_file);
+#endif /* ifdef USE_NTLS */
 #ifndef ENABLE_CRYPTO_MBEDTLS
     SHOW_STR_INLINE(pkcs12_file);
 #endif
+#ifdef USE_NTLS
+#ifndef ENABLE_CRYPTO_MBEDTLS
+    SHOW_STR_INLINE(sign_pkcs12_file);
+    SHOW_STR_INLINE(enc_pkcs12_file);
+#endif /* ifndef ENABLE_CRYPTO_MBEDTLS */
+#endif /* ifdef USE_NTLS */
 #ifdef ENABLE_CRYPTOAPI
     SHOW_STR(cryptoapi_cert);
+#ifdef USE_NTLS
+    SHOW_STR(cryptoapi_sign_cert);
+    SHOW_STR(cryptoapi_enc_cert);
+#endif /* ifdef USE_NTLS */
 #endif
     SHOW_STR(cipher_list);
     SHOW_STR(cipher_list_tls13);
+#ifdef USE_NTLS
+    SHOW_STR(cipher_list_ntls);
+#endif /* ifdef USE_NTLS */
     SHOW_STR(tls_cert_profile);
     SHOW_STR(tls_verify);
     SHOW_STR(tls_export_cert);
@@ -2066,6 +2185,10 @@ show_settings(const struct options *o)
     }
     SHOW_INT(pkcs11_pin_cache_period);
     SHOW_STR(pkcs11_id);
+#ifdef USE_NTLS
+    SHOW_STR(pkcs11_sign_id);
+    SHOW_STR(pkcs11_enc_id);
+#endif /* ifdef USE_NTLS */
     SHOW_BOOL(pkcs11_id_management);
 #endif                  /* ENABLE_PKCS11 */
 
@@ -2846,6 +2969,101 @@ options_postprocess_verify_ce(const struct options *options,
         msg(M_USAGE, "--tls-version-min bigger than --tls-version-max");
     }
 
+#ifdef USE_NTLS
+    if (options->use_ntls && tls_version_min == 0)
+    {
+        /* TLS version is only meaningful on NTLS enabled. */
+        msg(M_WARN, "WARNING: Ignoring option 'tls-version-min' and 'tls-version-max' "
+            "on NTLS enabled.");
+    }
+
+#ifdef ENABLE_MANAGEMENT
+    if (options->management_flags & MF_EXTERNAL_CERT) {
+        const int sum = 
+            (options->management_signature_certificate != NULL)
+            + (options->management_encryption_certificate != NULL);
+
+        if (sum != 0 && sum != 2)
+        {
+            msg(M_USAGE, "If you use one of --management-external-sign-cert or --management-external-enc-cert, you must use them both");
+        }
+    }
+#endif /* ifdef ENABLE_MANAGEMENT */
+
+#ifdef ENABLE_PKCS11
+    if (options->pkcs11_providers[0]) {
+        const int sum =
+            (options->pkcs11_sign_id != NULL) + (options->pkcs11_enc_id != NULL);
+
+        if (sum != 0 && sum != 2)
+        {
+            msg(M_USAGE, "If you use one of --pkcs11-sign-id or --pkcs11-enc-id, you must use them both");
+        }
+    }
+#endif /* ifdef ENABLE_PKCS11 */
+
+#ifdef ENABLE_CRYPTOAPI
+    {
+        const int sum =
+            (options->cryptoapi_sign_cert != NULL) + (options->cryptoapi_enc_cert != NULL);
+
+        if (sum != 0 && sum != 2)
+        {
+            msg(M_USAGE, "If you use one of --cryptoapisigncert or --cryptoapienccert, you must use them both");
+        }
+    }
+#endif /* ifdef ENABLE_CRYPTOAPI */
+
+#define MUST_BE_UNDEF(parm, name) if (options->parm != defaults.parm) {msg(M_USAGE, err, name); \
+}
+    if (!options->use_ntls)
+    {
+        const char err[] = "Parameter %s can only be specified on NTLS enabled, i.e. where --use-ntls specified.";
+        MUST_BE_UNDEF(sign_cert_file, "--sign-cert");
+        MUST_BE_UNDEF(sign_priv_key_file, "--sign-key");
+#ifndef ENABLE_CRYPTO_MBEDTLS
+        MUST_BE_UNDEF(sign_pkcs12_file, "--sign-pkcs12");
+#endif /* ifndef ENABLE_CRYPTO_MBEDTLS */
+        MUST_BE_UNDEF(enc_cert_file, "--enc-cert");
+        MUST_BE_UNDEF(enc_priv_key_file, "--enc-key");
+#ifndef ENABLE_CRYPTO_MBEDTLS
+        MUST_BE_UNDEF(enc_pkcs12_file, "--enc-pkcs12");
+#endif /* ifndef ENABLE_CRYPTO_MBEDTLS */
+#ifdef ENABLE_MANAGEMENT
+        MUST_BE_UNDEF(management_signature_certificate, "--management-external-sign-cert");
+        MUST_BE_UNDEF(management_encryption_certificate, "--management-external-enc-cert");
+#endif /* ifdef ENABLE_MANAGEMENT */
+#ifdef ENABLE_PKCS11
+        MUST_BE_UNDEF(pkcs11_sign_id, "--pkcs11-sign-id");
+        MUST_BE_UNDEF(pkcs11_enc_id, "--pkcs11-enc-id");
+#endif /* ifdef ENABLE_PKCS11 */
+#ifdef ENABLE_CRYPTOAPI
+        MUST_BE_UNDEF(cryptoapi_sign_cert, "--cryptoapisigncert");
+        MUST_BE_UNDEF(cryptoapi_enc_cert, "--cryptoapienccert");
+#endif /* ifdef ENABLE_CRYPTOAPI */
+    }
+    else
+    {
+        const char err[] = "Parameter %s can not be specified on NTLS enabled.";
+        MUST_BE_UNDEF(dh_file, "--dh");
+        MUST_BE_UNDEF(cert_file, "--cert");
+        MUST_BE_UNDEF(priv_key_file, "--key");
+#ifndef ENABLE_CRYPTO_MBEDTLS
+        MUST_BE_UNDEF(pkcs12_file, "--pkcs12");
+#endif /* ifndef ENABLE_CRYPTO_MBEDTLS */
+#ifdef ENABLE_MANAGEMENT
+        MUST_BE_UNDEF(management_certificate, "--management-external-cert");
+#endif /* ifdef ENABLE_MANAGEMENT */
+#ifdef ENABLE_PKCS11
+        MUST_BE_UNDEF(pkcs11_id, "--pkcs11-id");
+#endif /* ifdef ENABLE_PKCS11 */
+#ifdef ENABLE_CRYPTOAPI
+        MUST_BE_UNDEF(cryptoapi_cert, "--cryptoapicert");
+#endif /* ifdef ENABLE_CRYPTOAPI */
+    }
+#undef MUST_BE_UNDEF
+#endif /* ifdef USE_NTLS */
+
     if (options->tls_server || options->tls_client)
     {
         check_ca_required(options);
@@ -2856,6 +3074,20 @@ options_postprocess_verify_ce(const struct options *options,
             {
                 msg(M_USAGE, "Parameter --pkcs11-id cannot be used when --pkcs11-id-management is also specified.");
             }
+#ifdef USE_NTLS
+            if (options->pkcs11_id_management && (options->pkcs11_sign_id != NULL || options->pkcs11_enc_id != NULL))
+            {
+                msg(M_USAGE, "Parameter --pkcs11-sign-id or --pkcs11-enc-id cannot be used when --pkcs11-id-management is also specified.");
+            }
+            if (options->use_ntls)
+            {
+                if (!options->pkcs11_id_management && (options->pkcs11_sign_id == NULL || options->pkcs11_enc_id == NULL))
+                {
+                    msg(M_USAGE, "Parameter --pkcs11-sign-id, --pkcs11-enc-id or --pkcs11-id-management should be specified.");
+                }
+            }
+            else
+#endif /* ifdef USE_NTLS */
             if (!options->pkcs11_id_management && options->pkcs11_id == NULL)
             {
                 msg(M_USAGE, "Parameter --pkcs11-id or --pkcs11-id-management should be specified.");
@@ -2864,10 +3096,22 @@ options_postprocess_verify_ce(const struct options *options,
             {
                 msg(M_USAGE, "Parameter --cert cannot be used when --pkcs11-provider is also specified.");
             }
+#ifdef USE_NTLS
+            if (options->sign_cert_file || options->enc_cert_file)
+            {
+                msg(M_USAGE, "Parameter --sign-cert or --enc-cert cannot be used when --pkcs11-provider is also specified.");
+            }
+#endif /* ifdef USE_NTLS */
             if (options->priv_key_file)
             {
                 msg(M_USAGE, "Parameter --key cannot be used when --pkcs11-provider is also specified.");
             }
+#ifdef USE_NTLS
+            if (options->sign_priv_key_file || options->enc_priv_key_file)
+            {
+                msg(M_USAGE, "Parameter --sign-key or --enc-key cannot be used when --pkcs11-provider is also specified.");
+            }
+#endif /* ifdef USE_NTLS */
 #ifdef ENABLE_MANAGEMENT
             if (options->management_flags & MF_EXTERNAL_KEY)
             {
@@ -2875,6 +3119,11 @@ options_postprocess_verify_ce(const struct options *options,
             }
             if (options->management_flags & MF_EXTERNAL_CERT)
             {
+#ifdef USE_NTLS
+                if (!options->management_signature_certificate || !options->management_encryption_certificate)
+                msg(M_USAGE, "Parameter --management-external-sign-cert or --management-external-enc-cert cannot be used when --pkcs11-provider is also specified.");
+                if (!options->management_certificate)
+#endif /* ifdef USE_NTLS */
                 msg(M_USAGE, "Parameter --management-external-cert cannot be used when --pkcs11-provider is also specified.");
             }
 #endif
@@ -2887,6 +3136,12 @@ options_postprocess_verify_ce(const struct options *options,
             {
                 msg(M_USAGE, "Parameter --cryptoapicert cannot be used when --pkcs11-provider is also specified.");
             }
+#ifdef USE_NTLS
+            if (options->cryptoapi_sign_cert || options->cryptoapi_enc_cert)
+            {
+                msg(M_USAGE, "Parameter --cryptoapisigncert or --cryptoapienccert cannot be used when --pkcs11-provider is also specified.");
+            }
+#endif /* ifdef USE_NTLS */
 #endif
         }
         else
@@ -2896,14 +3151,45 @@ options_postprocess_verify_ce(const struct options *options,
         {
             msg(M_USAGE, "--key and --management-external-key are mutually exclusive");
         }
+#ifdef USE_NTLS
+        else if ((options->management_flags & MF_EXTERNAL_KEY) && options->sign_priv_key_file)
+        {
+            msg(M_USAGE, "--sign-key and --management-external-key are mutually exclusive");
+        }
+        else if ((options->management_flags & MF_EXTERNAL_KEY) && options->enc_priv_key_file)
+        {
+            msg(M_USAGE, "--enc-key and --management-external-key are mutually exclusive");
+        }
+#endif /* ifdef USE_NTLS */
         else if ((options->management_flags & MF_EXTERNAL_CERT))
         {
+#ifdef USE_NTLS
+            if (options->cert_file && options->management_certificate)
+#else
             if (options->cert_file)
+#endif /* ifdef USE_NTLS */
             {
                 msg(M_USAGE, "--cert and --management-external-cert are mutually exclusive");
             }
+#ifdef USE_NTLS
+            else if (options->sign_cert_file && options->management_signature_certificate)
+            {
+                msg(M_USAGE, "--sign-cert and --management-external-sign-cert are mutually exclusive");
+            }
+            else if (options->enc_cert_file && options->management_encryption_certificate)
+            {
+                msg(M_USAGE, "--enc-cert and --management-external-enc-cert are mutually exclusive");
+            }
+#endif /* ifdef USE_NTLS */
             else if (!(options->management_flags & MF_EXTERNAL_KEY))
             {
+#ifdef USE_NTLS
+                if (options->management_signature_certificate)
+                msg(M_USAGE, "--management-external-sign-cert must be used with --management-external-key");
+                if (options->management_encryption_certificate)
+                msg(M_USAGE, "--management-external-enc-cert must be used with --management-external-key");
+                if (options->management_certificate)
+#endif /* ifdef USE_NTLS */
                 msg(M_USAGE, "--management-external-cert must be used with --management-external-key");
             }
         }
@@ -2936,6 +3222,60 @@ options_postprocess_verify_ce(const struct options *options,
 #endif
         }
         else
+#ifdef USE_NTLS
+        if (options->cryptoapi_sign_cert)
+        {
+            if (options->sign_cert_file)
+            {
+                msg(M_USAGE, "Parameter --sign-cert cannot be used when --cryptoapisigncert is also specified.");
+            }
+            if (options->sign_priv_key_file)
+            {
+                msg(M_USAGE, "Parameter --sign-key cannot be used when --cryptoapisigncert is also specified.");
+            }
+            if (options->sign_pkcs12_file)
+            {
+                msg(M_USAGE, "Parameter --sign-pkcs12 cannot be used when --cryptoapisigncert is also specified.");
+            }
+#ifdef ENABLE_MANAGEMENT
+            if (options->management_flags & MF_EXTERNAL_KEY)
+            {
+                msg(M_USAGE, "Parameter --management-external-key cannot be used when --cryptoapisigncert is also specified.");
+            }
+            if (options->management_flags & MF_EXTERNAL_CERT && options->management_signature_certificate)
+            {
+                msg(M_USAGE, "Parameter --management-external-sign-cert cannot be used when --cryptoapisigncert is also specified.");
+            }
+#endif
+        }
+        else
+        if (options->cryptoapi_enc_cert)
+        {
+            if (options->enc_cert_file)
+            {
+                msg(M_USAGE, "Parameter --enc-cert cannot be used when --cryptoapienccert is also specified.");
+            }
+            if (options->enc_priv_key_file)
+            {
+                msg(M_USAGE, "Parameter --enc-key cannot be used when --cryptoapienccert is also specified.");
+            }
+            if (options->enc_pkcs12_file)
+            {
+                msg(M_USAGE, "Parameter --enc-pkcs12 cannot be used when --cryptoapienccert is also specified.");
+            }
+#ifdef ENABLE_MANAGEMENT
+            if (options->management_flags & MF_EXTERNAL_KEY)
+            {
+                msg(M_USAGE, "Parameter --management-external-key cannot be used when --cryptoapisigncert is also specified.");
+            }
+            if (options->management_flags & MF_EXTERNAL_CERT && options->management_encryption_certificate)
+            {
+                msg(M_USAGE, "Parameter --management-external-enc-cert cannot be used when --cryptoapienccert is also specified.");
+            }
+#endif
+        }
+        else
+#endif /* ifdef USE_NTLS */
 #endif /* ifdef ENABLE_CRYPTOAPI */
         if (options->pkcs12_file)
         {
@@ -2961,11 +3301,76 @@ options_postprocess_verify_ce(const struct options *options,
             }
             if (options->management_flags & MF_EXTERNAL_CERT)
             {
+#ifdef USE_NTLS
+                if (!options->management_certificate)
+#endif /* ifdef USE_NTLS */
                 msg(M_USAGE, "Parameter --management-external-cert cannot be used when --pkcs12 is also specified.");
             }
 #endif
 #endif /* ifdef ENABLE_CRYPTO_MBEDTLS */
         }
+#ifdef USE_NTLS
+        else if (options->sign_pkcs12_file)
+        {
+#ifdef ENABLE_CRYPTO_MBEDTLS
+            msg(M_USAGE, "Parameter --sign-pkcs12 cannot be used with the mbed TLS version version of OpenVPN.");
+#else
+            if (options->ca_path)
+            {
+                msg(M_USAGE, "Parameter --capath cannot be used when --sign-pkcs12 is also specified.");
+            }
+            if (options->sign_cert_file)
+            {
+                msg(M_USAGE, "Parameter --sign-cert cannot be used when --sign-pkcs12 is also specified.");
+            }
+            if (options->sign_priv_key_file)
+            {
+                msg(M_USAGE, "Parameter --sign-key cannot be used when --sign-pkcs12 is also specified.");
+            }
+#ifdef ENABLE_MANAGEMENT
+            if (options->management_flags & MF_EXTERNAL_KEY)
+            {
+                msg(M_USAGE, "Parameter --management-external-key cannot be used when --sign-pkcs12 is also specified.");
+            }
+            if (options->management_flags & MF_EXTERNAL_CERT)
+            {
+                if (!options->management_signature_certificate)
+                msg(M_USAGE, "Parameter --management-external-sign-cert cannot be used when --sign-pkcs12 is also specified.");
+            }
+#endif /* ifdef ENABLE_MANAGEMENT */
+#endif /* ifdef ENABLE_CRYPTO_MBEDTLS */
+        }
+        else if (options->enc_pkcs12_file)
+        {
+#ifdef ENABLE_CRYPTO_MBEDTLS
+            msg(M_USAGE, "Parameter --enc-pkcs12 cannot be used with the mbed TLS version version of OpenVPN.");
+#else
+            if (options->ca_path)
+            {
+                msg(M_USAGE, "Parameter --capath cannot be used when --enc-pkcs12 is also specified.");
+            }
+            if (options->enc_cert_file)
+            {
+                msg(M_USAGE, "Parameter --enc-cert cannot be used when --enc-pkcs12 is also specified.");
+            }
+            if (options->enc_priv_key_file)
+            {
+                msg(M_USAGE, "Parameter --enc-key cannot be used when --enc-pkcs12 is also specified.");
+            }
+#ifdef ENABLE_MANAGEMENT
+            if (options->management_flags & MF_EXTERNAL_KEY)
+            {
+                msg(M_USAGE, "Parameter --management-external-key cannot be used when --enc-pkcs12 is also specified.");
+            }
+            if (options->management_flags & MF_EXTERNAL_CERT)
+            {
+                if (!options->management_encryption_certificate)
+                msg(M_USAGE, "Parameter --management-external-enc-cert cannot be used when --enc-pkcs12 is also specified.");
+            }
+#endif /* ifdef ENABLE_MANAGEMENT */
+#endif /* ifdef ENABLE_CRYPTO_MBEDTLS */
+        }
+#endif /* ifdef USE_NTLS */
         else
         {
 #ifdef ENABLE_CRYPTO_MBEDTLS
@@ -3005,10 +3410,22 @@ options_postprocess_verify_ce(const struct options *options,
 #ifdef ENABLE_MANAGEMENT
                 if (!(options->management_flags & MF_EXTERNAL_CERT))
 #endif
+#ifdef USE_NTLS
+                if (options->use_ntls) {
+                    notnull(options->sign_cert_file, "signature certificate file (--sign-cert) or PKCS#12 file (--sign-pkcs12)");
+                    notnull(options->enc_cert_file, "encryption certificate file (--enc-cert) or PKCS#12 file (--enc-pkcs12)");
+                } else 
+#endif /* ifdef USE_NTLS */
                 notnull(options->cert_file, "certificate file (--cert) or PKCS#12 file (--pkcs12)");
 #ifdef ENABLE_MANAGEMENT
                 if (!(options->management_flags & MF_EXTERNAL_KEY))
 #endif
+#ifdef USE_NTLS
+                if (options->use_ntls) {
+                    notnull(options->sign_priv_key_file, "signature private key file (--sign-key) or PKCS#12 file (--sign-pkcs12)");
+                    notnull(options->enc_priv_key_file, "encryption private key file (--enc-key) or PKCS#12 file (--enc-pkcs12)");
+                } else 
+#endif /* ifdef USE_NTLS */
                 notnull(options->priv_key_file, "private key file (--key) or PKCS#12 file (--pkcs12)");
             }
         }
@@ -3061,6 +3478,19 @@ options_postprocess_verify_ce(const struct options *options,
         MUST_BE_UNDEF(push_peer_info);
         MUST_BE_UNDEF(tls_exit);
         MUST_BE_UNDEF(crl_file);
+#ifdef USE_NTLS
+        MUST_BE_UNDEF(sign_cert_file);
+        MUST_BE_UNDEF(sign_priv_key_file);
+#ifndef ENABLE_CRYPTO_MBEDTLS
+        MUST_BE_UNDEF(sign_pkcs12_file);
+#endif /* ifndef ENABLE_CRYPTO_MBEDTLS */
+        MUST_BE_UNDEF(enc_cert_file);
+        MUST_BE_UNDEF(enc_priv_key_file);
+#ifndef ENABLE_CRYPTO_MBEDTLS
+        MUST_BE_UNDEF(enc_pkcs12_file);
+#endif /* ifndef ENABLE_CRYPTO_MBEDTLS */
+        MUST_BE_UNDEF(cipher_list_ntls);
+#endif /* ifdef USE_NTLS */
         MUST_BE_UNDEF(ns_cert_type);
         MUST_BE_UNDEF(remote_cert_ku[0]);
         MUST_BE_UNDEF(remote_cert_eku);
@@ -3069,6 +3499,10 @@ options_postprocess_verify_ce(const struct options *options,
         MUST_BE_UNDEF(pkcs11_private_mode[0]);
         MUST_BE_UNDEF(pkcs11_id);
         MUST_BE_UNDEF(pkcs11_id_management);
+#ifdef USE_NTLS
+        MUST_BE_UNDEF(pkcs11_sign_id);
+        MUST_BE_UNDEF(pkcs11_enc_id);
+#endif /* ifdef USE_NTLS */
 #endif
 
         if (pull)
@@ -3468,9 +3902,11 @@ options_postprocess_verify(const struct options *o)
 }
 
 /**
- * Checks for availibility of Chacha20-Poly1305 and sets
- * the ncp_cipher to either AES-256-GCM:AES-128-GCM or
- * AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305.
+ * Checks for availibility of SM4-GCM, Chacha20-Poly1305
+ * and sets the ncp_cipher to either AES-256-GCM:AES-128-GCM,
+ * AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305,
+ * SM4-GCM:AES-256-GCM:AES-128-GCM,
+ * SM4-GCM:AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305
  */
 static void
 options_postprocess_setdefault_ncpciphers(struct options *o)
@@ -3490,6 +3926,19 @@ options_postprocess_setdefault_ncpciphers(struct options *o)
         can_do_chacha = tls_item_in_cipher_list("CHACHA20-POLY1305", dco_get_supported_ciphers());
     }
 
+    /* check if crypto library supports sm4 */
+    bool can_do_sm4 = cipher_valid("SM4-GCM");
+
+    if (can_do_sm4 && can_do_chacha)
+    {
+        o->ncp_ciphers = "SM4-GCM:AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305";
+    }
+    else
+    if (can_do_sm4 && !can_do_chacha)
+    {
+        o->ncp_ciphers = "SM4-GCM:AES-256-GCM:AES-128-GCM";
+    }
+    else
     if (can_do_chacha)
     {
         o->ncp_ciphers = "AES-256-GCM:AES-128-GCM:CHACHA20-POLY1305";
@@ -3687,6 +4136,12 @@ options_postprocess_mutate(struct options *o, struct env_set *es)
         options_postprocess_mutate_ce(o, o->connection_list->array[i]);
     }
 
+#ifdef USE_NTLS
+    if (o->use_ntls && o->tls_server) {
+        o->dh_file = NULL;
+    }
+    else
+#endif /* ifdef USE_NTLS */
     if (o->tls_server)
     {
         /* Check that DH file is specified, or explicitly disabled */
@@ -4044,6 +4499,41 @@ options_postprocess_filechecks(struct options *options)
                                                 CHKACC_FILE, options->crl_file,
                                                 R_OK, "--crl-verify");
     }
+
+#ifdef USE_NTLS
+    /* ** NTLS related files ** */
+    errs |= check_file_access_inline(options->sign_cert_file_inline, CHKACC_FILE,
+        options->cert_file, R_OK, "--sign-cert");
+
+#ifdef ENABLE_MANAGMENT
+    if (!(options->management_flags & MF_EXTERNAL_KEY))
+#endif /* ENABLE_MANAGMENT */
+    {
+        errs |= check_file_access_inline(options->priv_key_file_inline,
+            CHKACC_FILE | CHKACC_PRIVATE,
+            options->sign_priv_key_file, R_OK, "--sign-key");
+    }
+
+    errs |= check_file_access_inline(options->pkcs12_file_inline,
+        CHKACC_FILE | CHKACC_PRIVATE,
+        options->sign_pkcs12_file, R_OK, "--sign-pkcs12");
+
+    errs |= check_file_access_inline(options->sign_cert_file_inline, CHKACC_FILE,
+        options->cert_file, R_OK, "--enc-cert");
+
+#ifdef ENABLE_MANAGMENT
+    if (!(options->management_flags & MF_EXTERNAL_KEY))
+#endif /* ENABLE_MANAGMENT */
+    {
+        errs |= check_file_access_inline(options->priv_key_file_inline,
+            CHKACC_FILE | CHKACC_PRIVATE,
+            options->sign_priv_key_file, R_OK, "--enc-key");
+    }
+
+    errs |= check_file_access_inline(options->pkcs12_file_inline,
+        CHKACC_FILE | CHKACC_PRIVATE,
+        options->sign_pkcs12_file, R_OK, "--enc-pkcs12");
+#endif /* USE_NTLS */
 
     ASSERT(options->connection_list);
     for (int i = 0; i < options->connection_list->len; ++i)
@@ -5658,6 +6148,11 @@ key_is_external(const struct options *options)
     ret = ret || (options->pkcs11_providers[0] != NULL);
 #endif
 #ifdef ENABLE_CRYPTOAPI
+#ifdef USE_NTLS
+    if (options->use_ntls)
+        ret = ret || (options->cryptoapi_sign_cert && options->cryptoapi_enc_cert);
+    else
+#endif /* ifdef USE_NTLS */
     ret = ret || options->cryptoapi_cert;
 #endif
 
@@ -5904,6 +6399,20 @@ add_option(struct options *options,
         options->management_flags |= MF_EXTERNAL_CERT;
         options->management_certificate = p[1];
     }
+#ifdef USE_NTLS
+    else if (streq(p[0], "management-external-sign-cert") && p[1] && !p[2])
+    {
+        VERIFY_PERMISSION(OPT_P_GENERAL);
+        options->management_flags |= MF_EXTERNAL_CERT;
+        options->management_signature_certificate = p[1];
+    }
+    else if (streq(p[0], "management-external-enc-cert") && p[1] && !p[2])
+    {
+        VERIFY_PERMISSION(OPT_P_GENERAL);
+        options->management_flags |= MF_EXTERNAL_CERT;
+        options->management_encryption_certificate = p[1];
+    }
+#endif /* #ifdef USE_NTLS */
     else if (streq(p[0], "management-client-auth") && !p[1])
     {
         VERIFY_PERMISSION(OPT_P_GENERAL);
@@ -8856,6 +9365,18 @@ add_option(struct options *options,
         VERIFY_PERMISSION(OPT_P_GENERAL);
         options->cryptoapi_cert = p[1];
     }
+#ifdef USE_NTLS
+    else if (streq(p[0], "cryptoapisigncert") && p[1] && !p[2])
+    {
+        VERIFY_PERMISSION(OPT_P_GENERAL);
+        options->cryptoapi_sign_cert = p[1];
+    }
+    else if (streq(p[0], "cryptoapienccert") && p[1] && !p[2])
+    {
+        VERIFY_PERMISSION(OPT_P_GENERAL);
+        options->cryptoapi_enc_cert = p[1];
+    }
+#endif /* ifdef USE_NTLS */
 #endif
     else if (streq(p[0], "key") && p[1] && !p[2])
     {
@@ -9037,6 +9558,42 @@ add_option(struct options *options,
         options->verify_x509_type = type;
         options->verify_x509_name = p[1];
     }
+#ifdef USE_NTLS
+    else if (streq(p[0], "use-ntls") && !p[1])
+    {
+        VERIFY_PERMISSION(OPT_P_GENERAL);
+        options->use_ntls = true;
+    }
+    else if (streq(p[0], "sign-cert") && p[1] && !p[2])
+    {
+        VERIFY_PERMISSION(OPT_P_GENERAL | OPT_P_INLINE);
+        options->sign_cert_file = p[1];
+        options->sign_cert_file_inline = is_inline;
+    }
+    else if (streq(p[0], "sign-key") && p[1] && !p[2])
+    {
+        VERIFY_PERMISSION(OPT_P_GENERAL | OPT_P_INLINE);
+        options->sign_priv_key_file = p[1];
+        options->sign_priv_key_file_inline = is_inline;
+    }
+    else if (streq(p[0], "enc-cert") && p[1] && !p[2])
+    {
+        VERIFY_PERMISSION(OPT_P_GENERAL | OPT_P_INLINE);
+        options->enc_cert_file = p[1];
+        options->enc_cert_file_inline = is_inline;
+    }
+    else if (streq(p[0], "enc-key") && p[1] && !p[2])
+    {
+        VERIFY_PERMISSION(OPT_P_GENERAL | OPT_P_INLINE);
+        options->enc_priv_key_file = p[1];
+        options->enc_priv_key_file_inline = is_inline;
+    }
+    else if (streq(p[0], "ntls-cipher") && p[1] && !p[2])
+    {
+        VERIFY_PERMISSION(OPT_P_GENERAL);
+        options->cipher_list_ntls = p[1];
+    }
+#endif
     else if (streq(p[0], "ns-cert-type") && p[1] && !p[2])
     {
         VERIFY_PERMISSION(OPT_P_GENERAL);
@@ -9355,6 +9912,18 @@ add_option(struct options *options,
         VERIFY_PERMISSION(OPT_P_GENERAL);
         options->pkcs11_id_management = true;
     }
+#ifdef USE_NTLS
+    else if (streq(p[0], "pkcs11-sign-id") && p[1] && !p[2])
+    {
+        VERIFY_PERMISSION(OPT_P_GENERAL);
+        options->pkcs11_sign_id = p[1];
+    }
+    else if (streq(p[0], "pkcs11-enc-id") && p[1] && !p[2])
+    {
+        VERIFY_PERMISSION(OPT_P_GENERAL);
+        options->pkcs11_enc_id = p[1];
+    }
+#endif /* ifdef USE_NTLS */
 #endif /* ifdef ENABLE_PKCS11 */
     else if (streq(p[0], "rmtun") && !p[1])
     {

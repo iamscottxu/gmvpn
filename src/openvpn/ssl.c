@@ -239,8 +239,64 @@ static const tls_cipher_name_pair tls_cipher_name_translation_table[] = {
     {"kRSA", "kRSA"}, {"!kRSA", "!kRSA"},
     {"SRP", "SRP"}, {"!SRP", "!SRP"},
 #endif
+#ifdef ENABLE_CRYPTO_TONGSUO
+    /* Tongsuo-specific group names */
+    { "DEFAULT", "DEFAULT" },
+    { "ALL", "ALL" },
+    { "HIGH", "HIGH" }, { "!HIGH", "!HIGH" },
+    { "MEDIUM", "MEDIUM" }, { "!MEDIUM", "!MEDIUM" },
+    { "LOW", "LOW" }, { "!LOW", "!LOW" },
+    { "ECDH", "ECDH" }, { "!ECDH", "!ECDH" },
+    { "ECDSA", "ECDSA" }, { "!ECDSA", "!ECDSA" },
+    { "EDH", "EDH" }, { "!EDH", "!EDH" },
+    { "EXP", "EXP" }, { "!EXP", "!EXP" },
+    { "RSA", "RSA" }, { "!RSA", "!RSA" },
+    { "kRSA", "kRSA" }, { "!kRSA", "!kRSA" },
+    { "SRP", "SRP" }, { "!SRP", "!SRP" },
+#endif
     {NULL, NULL}
 };
+
+#ifdef USE_NTLS
+/**
+ * NTLS Cipher suite name translation table
+ */
+static const tls_cipher_name_pair tls_cipher_name_translation_table_ntls[] = {
+    { "ECDHE-SM2-SM4-CBC-SM3", "ECDHE_SM4_CBC_SM3" },
+    { "ECDHE-SM2-SM4-GCM-SM3", "ECDHE_SM4_GCM_SM3" },
+    { "ECC-SM2-SM4-CBC-SM3", "ECC_SM4_CBC_SM3" },
+    { "ECC-SM2-SM4-GCM-SM3", "ECC_SM4_GCM_SM3" },
+    { "IBSDH-SM9-SM4-CBC-SM3", "IBSDH_SM4_CBC_SM3" },
+    { "IBSDH-SM9-SM4-GCM-SM3", "IBSDH_SM4_GCM_SM3" },
+    { "IBC-SM9-SM4-CBC-SM3", "ECC_SM4_CBC_SM3" },
+    { "IBC-SM9-SM4-GCM-SM3", "ECC_SM4_GCM_SM3" },
+    { "RSA-SM4-CBC-SM3", "RSA_SM4_CBC_SM3" },
+    { "RSA-SM4-GCM-SM3", "RSA_SM4_GCM_SM3" },
+    { "RSA-SM4-CBC-SHA256", "RSA_SM4_CBC_SHA256" },
+    { "RSA-SM4-GCM-SHA256", "RSA_SM4_GCM_SHA256" },
+    #ifdef ENABLE_CRYPTO_TONGSUO
+    /* Tongsuo-specific group names */
+    { "DEFAULT", "DEFAULT" },
+    { "ALL", "ALL" },
+    { "HIGH", "HIGH" }, { "!HIGH", "!HIGH" },
+    { "MEDIUM", "MEDIUM" }, { "!MEDIUM", "!MEDIUM" },
+    { "LOW", "LOW" }, { "!LOW", "!LOW" },
+    { "ECDH", "ECDH" }, { "!ECDH", "!ECDH" },
+    { "ECDSA", "ECDSA" }, { "!ECDSA", "!ECDSA" },
+    { "EDH", "EDH" }, { "!EDH", "!EDH" },
+    { "EXP", "EXP" }, { "!EXP", "!EXP" },
+    { "RSA", "RSA" }, { "!RSA", "!RSA" },
+    { "kRSA", "kRSA" }, { "!kRSA", "!kRSA" },
+    { "SRP", "SRP" }, { "!SRP", "!SRP" },
+    { "kSM2", "kSM2" }, { "!kSM2", "!kSM2" },
+    { "kSM2DHE", "kSM2DHE" }, { "!kSM2DHE", "!kSM2DHE" },
+    { "SM2", "SM2" }, { "!SM2", "!SM2" },
+    { "SM4", "SM4" }, { "!SM4", "!SM4" },
+    { "SM3", "SM3" }, { "!SM3", "!SM3" },
+#endif
+    {NULL, NULL}
+};
+#endif /* ifdef USE_NTLS */
 
 /**
  * Update the implicit IV for a key_ctx_bi based on TLS session ids and cipher
@@ -274,6 +330,27 @@ tls_get_cipher_name_pair(const char *cipher_name, size_t len)
     /* No entry found, return NULL */
     return NULL;
 }
+
+#ifdef USE_NTLS
+const tls_cipher_name_pair * 
+tls_get_cipher_name_pair_ntls(const char* cipher_name, size_t len)
+{
+    const tls_cipher_name_pair* pair = tls_cipher_name_translation_table_ntls;
+
+    while (pair->openssl_name != NULL)
+    {
+        if ((strlen(pair->openssl_name) == len && 0 == memcmp(cipher_name, pair->openssl_name, len))
+            || (strlen(pair->iana_name) == len && 0 == memcmp(cipher_name, pair->iana_name, len)))
+        {
+            return pair;
+        }
+        pair++;
+    }
+
+    /* No entry found, return NULL */
+    return NULL;
+}
+#endif /* ifdef USE_NTLS */
 
 /**
  * Limit the reneg_bytes value when using a small-block (<128 bytes) cipher.
@@ -673,8 +750,15 @@ init_ssl(const struct options *options, struct tls_root_ctx *new_ctx, bool in_ch
 
     if (options->tls_server)
     {
+#ifdef USE_NTLS
+        if (options->use_ntls) tls_ctx_server_new_ntls(new_ctx);
+        else
+#endif /* ifdef USE_NTLS */
         tls_ctx_server_new(new_ctx);
 
+#ifdef USE_NTLS
+        if (!options->use_ntls)
+#endif /* ifdef USE_NTLS */
         if (options->dh_file)
         {
             tls_ctx_load_dh_params(new_ctx, options->dh_file,
@@ -683,6 +767,10 @@ init_ssl(const struct options *options, struct tls_root_ctx *new_ctx, bool in_ch
     }
     else                        /* if client */
     {
+#ifdef USE_NTLS
+        if (options->use_ntls) tls_ctx_client_new_ntls(new_ctx);
+        else
+#endif /* ifdef USE_NTLS */
         tls_ctx_client_new(new_ctx);
     }
 
@@ -694,6 +782,9 @@ init_ssl(const struct options *options, struct tls_root_ctx *new_ctx, bool in_ch
      * cipher restrictions before loading certificates */
     tls_ctx_restrict_ciphers(new_ctx, options->cipher_list);
     tls_ctx_restrict_ciphers_tls13(new_ctx, options->cipher_list_tls13);
+#ifdef USE_NTLS
+    tls_ctx_restrict_ciphers_ntls(new_ctx, options->cipher_list_ntls, options->ssl_flags, options->tls_server);
+#endif /* ifdef USE_NTLS */
 
     /* Set the allow groups/curves for TLS if we want to override them */
     if (options->tls_groups)
@@ -706,7 +797,21 @@ init_ssl(const struct options *options, struct tls_root_ctx *new_ctx, bool in_ch
         goto err;
     }
 
+#ifdef USE_NTLS
+    if (options->use_ntls && options->sign_pkcs12_file && options->enc_pkcs12_file)
+    {
+        if (0 != tls_ctx_load_pkcs12_ntls(new_ctx,
+            options->sign_pkcs12_file, options->sign_pkcs12_file_inline,
+            options->enc_pkcs12_file, options->enc_pkcs12_file_inline,
+            !options->ca_file))
+        {
+            goto err;
+        }
+    }
+    else if (!options->use_ntls && options->pkcs12_file)
+#else /* ifdef USE_NTLS */
     if (options->pkcs12_file)
+#endif /* ifdef USE_NTLS */
     {
         if (0 != tls_ctx_load_pkcs12(new_ctx, options->pkcs12_file,
                                      options->pkcs12_file_inline, !options->ca_file))
@@ -715,7 +820,20 @@ init_ssl(const struct options *options, struct tls_root_ctx *new_ctx, bool in_ch
         }
     }
 #ifdef ENABLE_PKCS11
+#ifdef USE_NTLS
+    if (options->use_ntls && options->pkcs11_providers[0] && options->pkcs11_sign_id && options->pkcs11_enc_id)
+    {
+        if (!tls_ctx_use_pkcs11_ntls(new_ctx, options->pkcs11_id_management, options->pkcs11_sign_id, options->pkcs11_enc_id))
+        {
+            msg(M_WARN, "Cannot load certificate \"%s\" or \"%s\" using PKCS#11 interface",
+                options->pkcs11_sign_id, options->pkcs11_enc_id);
+            goto err;
+        }
+    }
+    else if (!options->use_ntls && options->pkcs11_providers[0] && options->pkcs11_id)
+#else /* ifdef USE_NTLS */
     else if (options->pkcs11_providers[0])
+#endif /* ifdef USE_NTLS */
     {
         if (!tls_ctx_use_pkcs11(new_ctx, options->pkcs11_id_management, options->pkcs11_id))
         {
@@ -726,13 +844,36 @@ init_ssl(const struct options *options, struct tls_root_ctx *new_ctx, bool in_ch
     }
 #endif
 #ifdef ENABLE_CRYPTOAPI
+#ifdef USE_NTLS
+    else if (options->use_ntls && options->cryptoapi_sign_cert && options->cryptoapi_enc_cert)
+    {
+        tls_ctx_load_cryptoapi_ntls(new_ctx, options->cryptoapi_sign_cert, options->cryptoapi_enc_cert);
+    }
+    else if (!options->use_ntls && options->cryptoapi_cert)
+#else /* ifdef USE_NTLS */
     else if (options->cryptoapi_cert)
+#endif /* ifdef USE_NTLS */
     {
         tls_ctx_load_cryptoapi(new_ctx, options->cryptoapi_cert);
     }
 #endif
 #ifdef ENABLE_MANAGEMENT
+#ifdef USE_NTLS
+    else if (options->use_ntls && options->management_flags & MF_EXTERNAL_CERT && options->management_signature_certificate && options->management_encryption_certificate) {
+        char* sign_cert = management_query_cert(management,
+            options->management_signature_certificate);
+        char* enc_cert = management_query_cert(management,
+            options->management_encryption_certificate);
+        tls_ctx_load_cert_file_ntls(new_ctx,
+            sign_cert, true,
+            enc_cert, true);
+        free(sign_cert);
+        free(enc_cert);
+    }
+    else if (!options->use_ntls && options->management_flags & MF_EXTERNAL_CERT && options->management_certificate)
+#else /* ifdef USE_NTLS */
     else if (options->management_flags & MF_EXTERNAL_CERT)
+#endif /* ifdef USE_NTLS */
     {
         char *cert = management_query_cert(management,
                                            options->management_certificate);
@@ -740,12 +881,33 @@ init_ssl(const struct options *options, struct tls_root_ctx *new_ctx, bool in_ch
         free(cert);
     }
 #endif
+#ifdef USE_NTLS
+    else if (options->use_ntls && options->sign_cert_file && options->enc_cert_file) {
+        tls_ctx_load_cert_file_ntls(new_ctx,
+            options->sign_cert_file, options->sign_cert_file_inline,
+            options->enc_cert_file, options->enc_cert_file_inline);
+    }
+    else if (!options->use_ntls && options->cert_file)
+#else /* ifdef USE_NTLS */
     else if (options->cert_file)
+#endif /* ifdef USE_NTLS */
     {
         tls_ctx_load_cert_file(new_ctx, options->cert_file, options->cert_file_inline);
     }
 
+#ifdef USE_NTLS
+    if (options->use_ntls && options->sign_priv_key_file && options->enc_priv_key_file) {
+        if (0 != tls_ctx_load_priv_file_ntls(new_ctx,
+            options->sign_priv_key_file, options->sign_priv_key_file_inline,
+            options->enc_priv_key_file, options->enc_priv_key_file_inline))
+        {
+            goto err;
+        }
+    }
+    else if (!options->use_ntls && options->priv_key_file)
+#else /* ifdef USE_NTLS */
     if (options->priv_key_file)
+#endif /* ifdef USE_NTLS */
     {
         if (0 != tls_ctx_load_priv_file(new_ctx, options->priv_key_file,
                                         options->priv_key_file_inline))
@@ -4082,6 +4244,9 @@ tls_update_remote_addr(struct tls_multi *multi, const struct link_socket_actual 
 void
 show_available_tls_ciphers(const char *cipher_list,
                            const char *cipher_list_tls13,
+#ifdef USE_NTLS
+                           const char* cipher_list_ntls,
+#endif /* ifdef USE_NTLS */
                            const char *tls_cert_profile)
 {
     printf("Available TLS Ciphers, listed in order of preference:\n");
@@ -4094,6 +4259,11 @@ show_available_tls_ciphers(const char *cipher_list,
 
     printf("\nFor TLS 1.2 and older (--tls-cipher):\n\n");
     show_available_tls_ciphers_list(cipher_list, tls_cert_profile, false);
+
+#ifdef USE_NTLS
+    printf("\nFor NTLS (--ntls-cipher):\n\n");
+    show_available_tls_ciphers_list_ntls(cipher_list_ntls, tls_cert_profile);
+#endif /* ifdef USE_NTLS */
 
     printf("\n"
            "Be aware that that whether a cipher suite in this list can actually work\n"

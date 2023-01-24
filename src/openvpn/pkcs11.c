@@ -703,6 +703,9 @@ tls_ctx_use_pkcs11(
     bool ok = false;
 
     ASSERT(ssl_ctx!=NULL);
+#ifdef USE_NTLS
+    ASSERT(!ssl_ctx->enable_ntls);
+#endif /* ifdef USE_NTLS */
     ASSERT(pkcs11_id_management || pkcs11_id!=NULL);
 
     dmsg(
@@ -816,6 +819,179 @@ cleanup:
 
     return ok ? 1 : 0;
 }
+
+#ifdef USE_NTLS
+int
+tls_ctx_use_pkcs11_ntls_inner(
+    struct tls_root_ctx* const ssl_ctx,
+    bool pkcs11_id_management,
+    const char* const pkcs11_id,
+    bool sign_pkcs11,
+    CK_RV* rv,
+    pkcs11h_certificate_t* certificate
+)
+{
+    pkcs11h_certificate_id_t certificate_id = NULL;
+
+    bool ok = false;
+
+    if (pkcs11_id_management)
+    {
+        struct user_pass id_resp;
+
+        CLEAR(id_resp);
+
+        id_resp.defined = false;
+        id_resp.nocache = true;
+        openvpn_snprintf(
+            id_resp.username,
+            sizeof(id_resp.username),
+            sign_pkcs11 ? "Please specify PKCS#11 id for signature certificate to use" : "Please specify PKCS#11 id for encryption certificate to use"
+        );
+
+        if (
+            !get_user_pass(
+                &id_resp,
+                NULL,
+                sign_pkcs11 ? "pkcs11-sign-id-request" : "pkcs11-enc-id-request",
+                GET_USER_PASS_MANAGEMENT | GET_USER_PASS_NEED_STR | GET_USER_PASS_NOFATAL
+            )
+            )
+        {
+            goto cleanup;
+        }
+
+        if (
+            (*rv = pkcs11h_certificate_deserializeCertificateId(
+                &certificate_id,
+                id_resp.password
+            )) != CKR_OK
+            )
+        {
+            msg(M_WARN, sign_pkcs11 ?
+                "PKCS#11: Cannot deserialize id for signature certificate %ld-'%s'" :
+                "PKCS#11: Cannot deserialize id for encryption certificate %ld-'%s'"
+                , *rv, pkcs11h_getMessage(*rv));
+            goto cleanup;
+        }
+    }
+    else
+    {
+        if (
+            (*rv = pkcs11h_certificate_deserializeCertificateId(
+                &certificate_id,
+                pkcs11_id
+            )) != CKR_OK
+            )
+        {
+            msg(M_WARN, sign_pkcs11 ? 
+                "PKCS#11: Cannot deserialize id for signature certificate %ld-'%s'" :
+                "PKCS#11: Cannot deserialize id for encryption certificate %ld-'%s'"
+                , *rv, pkcs11h_getMessage(*rv));
+            goto cleanup;
+        }
+    }
+
+    if (
+        (*rv = pkcs11h_certificate_create(
+            certificate_id,
+            NULL,
+            PKCS11H_PROMPT_MASK_ALLOW_ALL,
+            PKCS11H_PIN_CACHE_INFINITE,
+            certificate
+        )) != CKR_OK
+        )
+    {
+        msg(M_WARN, sign_pkcs11 ?
+            "PKCS#11: Cannot get signature certificate %ld-'%s'" :
+            "PKCS#11: Cannot get encryption certificate %ld-'%s'"
+            , *rv, pkcs11h_getMessage(*rv));
+        goto cleanup;
+    }
+
+    ok = true;
+
+cleanup:
+    if (certificate_id != NULL)
+    {
+        pkcs11h_certificate_freeCertificateId(certificate_id);
+        certificate_id = NULL;
+    }
+
+    return ok ? 1 : 0;
+}
+
+int
+tls_ctx_use_pkcs11_ntls(
+    struct tls_root_ctx* const ssl_ctx,
+    bool pkcs11_id_management,
+    const char* const pkcs11_sign_id,
+    const char* const pkcs11_enc_id
+)
+{
+    pkcs11h_certificate_t sign_certificate = NULL, enc_certificate = NULL;
+    bool ok = false;
+    CK_RV rv = CKR_OK;
+
+    ASSERT(ssl_ctx != NULL);
+    ASSERT(ssl_ctx->enable_ntls);
+    ASSERT(pkcs11_id_management || (pkcs11_sign_id != NULL && pkcs11_enc_id != NULL));
+
+    dmsg(
+        D_PKCS11_DEBUG,
+        "PKCS#11: tls_ctx_use_pkcs11_ntls - entered - ssl_ctx=%p, pkcs11_id_management=%d, pkcs11_sign_id='%s', pkcs11_enc_id='%s'",
+        (void*)ssl_ctx,
+        pkcs11_id_management ? 1 : 0,
+        pkcs11_sign_id,
+        pkcs11_enc_id
+    );
+
+    if (!tls_ctx_use_pkcs11_ntls_inner(ssl_ctx, pkcs11_id_management, pkcs11_sign_id, true, &rv, &sign_certificate))
+    {
+        goto cleanup;
+    }
+    if (!tls_ctx_use_pkcs11_ntls_inner(ssl_ctx, pkcs11_id_management, pkcs11_enc_id, false, &rv, &enc_certificate))
+    {
+        goto cleanup;
+    }
+
+    if (
+        (pkcs11_init_tls_session_ntls(
+            sign_certificate, enc_certificate,
+            ssl_ctx
+        ))
+        )
+    {
+        /* Handled by SSL context free */
+        sign_certificate = NULL;
+        enc_certificate = NULL;
+        goto cleanup;
+    }
+
+    ok = true;
+
+cleanup:
+    dmsg(
+        D_PKCS11_DEBUG,
+        "PKCS#11: tls_ctx_use_pkcs11_ntls - return ok=%d, rv=%ld",
+        ok ? 1 : 0,
+        rv
+    );
+
+    if (sign_certificate != NULL)
+    {
+        pkcs11h_certificate_freeCertificate(sign_certificate);
+        sign_certificate = NULL;
+    }
+    if (enc_certificate != NULL)
+    {
+        pkcs11h_certificate_freeCertificate(enc_certificate);
+        enc_certificate = NULL;
+    }
+
+    return ok ? 1 : 0;
+}
+#endif /* ifdef USE_NTLS */
 
 static
 PKCS11H_BOOL

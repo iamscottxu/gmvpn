@@ -92,8 +92,11 @@ struct options_pre_connect
 #endif
 };
 
-#if !defined(ENABLE_CRYPTO_OPENSSL) && !defined(ENABLE_CRYPTO_MBEDTLS)
-#error "At least one of OpenSSL or mbed TLS needs to be defined."
+#if !defined(ENABLE_CRYPTO_OPENSSL) && !defined(ENABLE_CRYPTO_TONGSUO) && !defined(ENABLE_CRYPTO_MBEDTLS)
+#error "At least one of OpenSSL, Tongsuo or mbed TLS needs to be defined."
+#endif
+#if defined(ENABLE_CRYPTO_OPENSSL) && defined(ENABLE_CRYPTO_TONGSUO)
+#error "OpenSSL and Tongsuo cannot be defined at the same time."
 #endif
 
 struct connection_entry
@@ -445,6 +448,11 @@ struct options
     /* Mask of MF_ values of manage.h */
     unsigned int management_flags;
     const char *management_certificate;
+
+#ifdef USE_NTLS
+    const char* management_signature_certificate;
+    const char* management_encryption_certificate;
+#endif /* ifdef USE_NTLS */
 #endif
 
 #ifdef ENABLE_PLUGIN
@@ -597,6 +605,24 @@ struct options
     const char *crl_file;
     bool crl_file_inline;
 
+#ifdef USE_NTLS
+    /* NTLS (control channel) parms */
+    bool use_ntls;
+    const char* sign_cert_file;
+    bool sign_cert_file_inline;
+    const char* sign_priv_key_file;
+    bool sign_priv_key_file_inline;
+    const char* sign_pkcs12_file;
+    bool sign_pkcs12_file_inline;
+    const char* enc_cert_file;
+    bool enc_cert_file_inline;
+    const char* enc_priv_key_file;
+    bool enc_priv_key_file_inline;
+    const char* enc_pkcs12_file;
+    bool enc_pkcs12_file_inline;
+    const char* cipher_list_ntls;
+#endif
+
     int ns_cert_type; /* set to 0, NS_CERT_CHECK_SERVER, or NS_CERT_CHECK_CLIENT */
     unsigned remote_cert_ku[MAX_PARMS];
     const char *remote_cert_eku;
@@ -614,10 +640,19 @@ struct options
     int pkcs11_pin_cache_period;
     const char *pkcs11_id;
     bool pkcs11_id_management;
+
+#ifdef USE_NTLS
+    const char* pkcs11_sign_id;
+    const char* pkcs11_enc_id;
+#endif /* ifdef USE_NTLS */
 #endif
 
 #ifdef ENABLE_CRYPTOAPI
     const char *cryptoapi_cert;
+#ifdef USE_NTLS
+    const char* cryptoapi_sign_cert;
+    const char* cryptoapi_enc_cert;
+#endif /* ifdef USE_NTLS */
 #endif
     /* Per-packet timeout on control channel */
     int tls_timeout;

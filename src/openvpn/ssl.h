@@ -544,11 +544,15 @@ bool is_hard_reset_method2(int op);
  *
  * @param cipher_list       list of allowed TLS cipher, or NULL.
  * @param cipher_list_tls13 list of allowed TLS 1.3+ cipher, or NULL
+ * @param cipher_list_ntls  list of allowed NTLS cipher, or NULL.
  * @param tls_cert_profile  TLS certificate crypto profile name.
  */
 void
 show_available_tls_ciphers(const char *cipher_list,
                            const char *cipher_list_tls13,
+#ifdef USE_NTLS
+                           const char *cipher_list_ntls,
+#endif /* ifdef USE_NTLS */
                            const char *tls_cert_profile);
 
 

@@ -56,7 +56,11 @@ print_openssl_errors()
     unsigned long e;
     while ((e = ERR_get_error()))
     {
+#if defined(ENABLE_CRYPTO_TONGSUO)
+        msg(M_WARN, "Tongsuo error %lu: %s\n", e, ERR_error_string(e, NULL));
+#else defined(ENABLE_CRYPTO_OPENSSL)
         msg(M_WARN, "OpenSSL error %lu: %s\n", e, ERR_error_string(e, NULL));
+#endif
     }
 }
 
@@ -139,7 +143,11 @@ xkey_load_generic_key(OSSL_LIB_CTX *libctx, void *handle, EVP_PKEY *pubkey,
         || EVP_PKEY_fromdata(ctx, &pkey, EVP_PKEY_KEYPAIR, params) != 1)
     {
         print_openssl_errors();
+#if defined(ENABLE_CRYPTO_TONGSUO)
+        msg(M_FATAL, "Tongsuo error: failed to load key into ovpn.xkey provider");
+#else defined(ENABLE_CRYPTO_OPENSSL)
         msg(M_FATAL, "OpenSSL error: failed to load key into ovpn.xkey provider");
+#endif
     }
     if (ctx)
     {

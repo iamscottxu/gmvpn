@@ -70,5 +70,20 @@ int pkcs11_certificate_serial(pkcs11h_certificate_t certificate, char *serial,
 int pkcs11_init_tls_session(pkcs11h_certificate_t certificate,
                             struct tls_root_ctx *const ssl_ctx);
 
+#ifdef USE_NTLS
+/**
+ * Load PKCS #11 Certificate's information into the given TLS context
+ *
+ * @param sign_certificate The PKCS #11 helper signature certificate object
+ * @param enc_certificate  The PKCS #11 helper encryption certificate object
+ * @param ssl_ctx          TLS context to use.
+ *
+ * @return                 1 on failure, 0 on success
+ */
+int pkcs11_init_tls_session_ntls(pkcs11h_certificate_t sign_certificate,
+                                 pkcs11h_certificate_t enc_certificate, 
+                                 struct tls_root_ctx* const ssl_ctx); //TODO
+#endif /* ifdef USE_NTLS */
+
 #endif /* defined(ENABLE_PKCS11) */
 #endif /* PKCS11_BACKEND_H_ */

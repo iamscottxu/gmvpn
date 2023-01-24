@@ -40,6 +40,10 @@
 /* passwords */
 #define UP_TYPE_AUTH        "Auth"
 #define UP_TYPE_PRIVATE_KEY "Private Key"
+#ifdef USE_NTLS
+#define UP_TYPE_SIGN_PRIVATE_KEY "Signature Private Key"
+#define UP_TYPE_ENC_PRIVATE_KEY  "Encryption Private Key"
+#endif /* ifdef USE_NTLS */
 
 /** @addtogroup control_processor
  *  @{ */

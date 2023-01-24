@@ -44,6 +44,9 @@
 #ifdef ENABLE_CRYPTO_OPENSSL
 #include "ssl_verify_openssl.h"
 #endif
+#ifdef ENABLE_CRYPTO_TONGSUO
+#include "ssl_verify_tongsuo.h"
+#endif
 #include "auth_token.h"
 #include "push.h"
 #include "ssl_util.h"

@@ -276,6 +276,7 @@
     <ClCompile Include="crypto.c" />
     <ClCompile Include="crypto_openssl.c" />
     <ClCompile Include="cryptoapi.c" />
+    <ClCompile Include="crypto_tongsuo.c" />
     <ClCompile Include="dco.c" />
     <ClCompile Include="dco_win.c" />
     <ClCompile Include="dhcp.c" />
@@ -315,6 +316,7 @@
     <ClCompile Include="ping.c" />
     <ClCompile Include="pkcs11.c" />
     <ClCompile Include="pkcs11_openssl.c" />
+    <ClCompile Include="pkcs11_tongsuo.c" />
     <ClCompile Include="platform.c" />
     <ClCompile Include="plugin.c" />
     <ClCompile Include="pool.c" />
@@ -335,9 +337,11 @@
     <ClCompile Include="ssl_openssl.c" />
     <ClCompile Include="ssl_ncp.c" />
     <ClCompile Include="ssl_pkt.c" />
+    <ClCompile Include="ssl_tongsuo.c" />
     <ClCompile Include="ssl_util.c" />
     <ClCompile Include="ssl_verify.c" />
     <ClCompile Include="ssl_verify_openssl.c" />
+    <ClCompile Include="ssl_verify_tongsuo.c" />
     <ClCompile Include="status.c" />
     <ClCompile Include="tls_crypt.c" />
     <ClCompile Include="tun.c" />
@@ -365,6 +369,7 @@
     <ClInclude Include="crypto_backend.h" />
     <ClInclude Include="crypto_openssl.h" />
     <ClInclude Include="cryptoapi.h" />
+    <ClInclude Include="crypto_tongsuo.h" />
     <ClInclude Include="dco.h" />
     <ClInclude Include="dco_internal.h" />
     <ClInclude Include="dco_win.h" />
@@ -433,13 +438,16 @@
     <ClInclude Include="ssl_ncp.h" />
     <ClInclude Include="ssl_openssl.h" />
     <ClInclude Include="ssl_pkt.h" />
+    <ClInclude Include="ssl_tongsuo.h" />
     <ClInclude Include="ssl_util.h" />
     <ClInclude Include="ssl_verify.h" />
     <ClInclude Include="ssl_verify_backend.h" />
     <ClInclude Include="ssl_verify_openssl.h" />
+    <ClInclude Include="ssl_verify_tongsuo.h" />
     <ClInclude Include="status.h" />
     <ClInclude Include="syshead.h" />
     <ClInclude Include="tls_crypt.h" />
+    <ClInclude Include="tongsuo_compat.h" />
     <ClInclude Include="tun.h" />
     <ClInclude Include="vlan.h" />
     <ClInclude Include="win32.h" />

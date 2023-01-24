@@ -37,6 +37,11 @@
 #include "ssl_verify_openssl.h"
 #define SSLAPI SSLAPI_OPENSSL
 #endif
+#ifdef ENABLE_CRYPTO_TONGSUO
+#include "ssl_tongsuo.h"
+#include "ssl_verify_tongsuo.h"
+#define SSLAPI SSLAPI_TONGSUO
+#endif
 #ifdef ENABLE_CRYPTO_MBEDTLS
 #include "ssl_mbedtls.h"
 #include "ssl_verify_mbedtls.h"
@@ -61,6 +66,16 @@ struct tls_session;
  */
 typedef struct { const char *openssl_name; const char *iana_name; } tls_cipher_name_pair;
 const tls_cipher_name_pair *tls_get_cipher_name_pair(const char *cipher_name, size_t len);
+
+#ifdef USE_NTLS
+/**
+ * Get a tls_cipher_name_pair containing OpenSSL and GB/T 38636 names for supplied NTLS cipher name
+ *
+ * @param cipher_name   Can be either OpenSSL or GB/T 38636 cipher name
+ * @return              tls_cipher_name_pair* if found, NULL otherwise
+ */
+const tls_cipher_name_pair* tls_get_cipher_name_pair_ntls(const char* cipher_name, size_t len);
+#endif /* ifdef USE_NTLS */
 
 /*
  *
@@ -132,12 +147,30 @@ int tls_version_max(void);
  */
 void tls_ctx_server_new(struct tls_root_ctx *ctx);
 
+#ifdef USE_NTLS
+/**
+ * Initialise a library-specific NTLS context for a server.
+ *
+ * @param ctx           TLS context to initialise
+ */
+void tls_ctx_server_new_ntls(struct tls_root_ctx* ctx);
+#endif /* ifdef USE_NTLS */
+
 /**
  * Initialises a library-specific TLS context for a client.
  *
  * @param ctx           TLS context to initialise
  */
 void tls_ctx_client_new(struct tls_root_ctx *ctx);
+
+#ifdef USE_NTLS
+/**
+ * Initialises a library-specific NTLS context for a client.
+ *
+ * @param ctx           TLS context to initialise
+ */
+void tls_ctx_client_new_ntls(struct tls_root_ctx* ctx);
+#endif /* ifdef USE_NTLS */
 
 /**
  * Frees the library-specific TLSv1 context
@@ -187,6 +220,20 @@ void tls_ctx_restrict_ciphers(struct tls_root_ctx *ctx, const char *ciphers);
  *                                      sane defaults.
  */
 void tls_ctx_restrict_ciphers_tls13(struct tls_root_ctx *ctx, const char *ciphers);
+
+#ifdef USE_NTLS
+/**
+ * Restrict the list of ciphers that can be used within the TLS context for NTLS
+ *
+ * @param ctx           TLS context to restrict, must be valid.
+ * @param ciphers       String containing : delimited cipher names, or NULL to use
+ *                                      sane defaults.
+ * @param ssl_flags     SSL flags to set
+ * @param filter_by_ssl_flags Filter ciphers by ssl_flags
+ */
+void tls_ctx_restrict_ciphers_ntls(struct tls_root_ctx* ctx, const char* ciphers, 
+                                   unsigned int ssl_flags, bool filter_by_ssl_flags);
+#endif /* ifdef USE_NTLS */
 
 /**
  * Set the TLS certificate profile.  The profile defines which crypto
@@ -256,6 +303,29 @@ void tls_ctx_load_ecdh_params(struct tls_root_ctx *ctx, const char *curve_name
 int tls_ctx_load_pkcs12(struct tls_root_ctx *ctx, const char *pkcs12_file,
                         bool pkcs12_file_inline, bool load_ca_file);
 
+#ifdef USE_NTLS
+/**
+ * Load PKCS #12 file for key, cert and (optionally) CA certs, and add to
+ * library-specific NTLS context.
+ *
+ * @param ctx                   TLS context to use
+ * @param sign_pkcs12_file      The file name to load the signature information
+ *                              from, or a string containing the signature
+ *                              information in the case of inline files.
+ * @param sign_pkcs12_file_inline True if sign_pkcs12_file is an inline file.
+ * @param enc_pkcs12_file       The file name to load the encryption information
+ *                              from, or a string containing the encryption
+ *                              information in the case of inline files.
+ * @param enc_pkcs12_file_inline True if enc_pkcs12_file is an inline file.
+ *
+ * @return                      1 if an error occurred, 0 if parsing was
+ *                              successful.
+ */
+int tls_ctx_load_pkcs12_ntls(struct tls_root_ctx* ctx, const char* sign_pkcs12_file,
+                             bool sign_pkcs12_file_inline, const char* enc_pkcs12_file,
+                             bool enc_pkcs12_file_inline, bool load_ca_file);
+#endif /* ifdef USE_NTLS */
+
 /**
  * Use Windows cryptoapi for key and cert, and add to library-specific TLS
  * context.
@@ -267,6 +337,24 @@ int tls_ctx_load_pkcs12(struct tls_root_ctx *ctx, const char *pkcs12_file,
 void tls_ctx_load_cryptoapi(struct tls_root_ctx *ctx, const char *cryptoapi_cert);
 
 #endif /* _WIN32 */
+
+#ifdef USE_NTLS
+/**
+ * Use Windows cryptoapi for key and cert, and add to library-specific TLS
+ * context (NTLS).
+ *
+ * @param ctx                   TLS context to use
+ * @param crypto_sign_cert      String representing the signature certificate
+ *                              to load.
+ * @param crypto_enc_cert       String representing the encryption certificate
+ *                              to load.
+ */
+#ifdef ENABLE_CRYPTOAPI
+void tls_ctx_load_cryptoapi_ntls(struct tls_root_ctx* ctx, const char* cryptoapi_sign_cert,
+                                 const char* cryptoapi_enc_cert);
+
+#endif /* _WIN32 */
+#endif /* ifdef USE_NTLS */
 
 /**
  * Load certificate file into the given TLS context. If the given certificate
@@ -280,6 +368,26 @@ void tls_ctx_load_cryptoapi(struct tls_root_ctx *ctx, const char *cryptoapi_cert
  */
 void tls_ctx_load_cert_file(struct tls_root_ctx *ctx, const char *cert_file,
                             bool cert_file_inline);
+
+#ifdef USE_NTLS
+/**
+ * Load certificate file into the given NTLS context. If the given certificate
+ * file contains a certificate chain, load the whole chain.
+ *
+ * @param ctx                   TLS context to use
+ * @param sign_cert_file        The file name to load the signature certificate
+ *                              from, or a string containing the signature
+ *                              certificate in the case of inline files.
+ * @param sign_cert_file_inline True if sign_cert_file is an inline file.
+ * @param enc_cert_file         The file name to load the encryption certificate
+ *                              from, or a string containing the encryption
+ *                              certificate in the case of inline files.
+ * @param enc_cert_file_inline  True if enc_cert_file is an inline file.
+ */
+void tls_ctx_load_cert_file_ntls(struct tls_root_ctx* ctx, const char* sign_cert_file,
+                                 bool sign_cert_file_inline, const char* enc_cert_file,
+                                 bool enc_cert_file_inline);
+#endif /* ifdef USE_NTLS */
 
 /**
  * Load private key file into the given TLS context.
@@ -295,6 +403,28 @@ void tls_ctx_load_cert_file(struct tls_root_ctx *ctx, const char *cert_file,
  */
 int tls_ctx_load_priv_file(struct tls_root_ctx *ctx, const char *priv_key_file,
                            bool priv_key_file_inline);
+
+#ifdef USE_NTLS
+/**
+ * Load private key file into the given TLS context.
+ *
+ * @param ctx                   TLS context to use
+ * @param sign_priv_key_file    The file name to load the signature private key
+ *                              from, or a string containing the signature
+ *                              private key in the case of inline files.
+ * @param sign_priv_key_file_inline True if sign_priv_key_file is an inline file
+ * @param enc_priv_key_file     The file name to load the encryption private key
+ *                              from, or a string containing the encryption
+ *                              private key in the case of inline files.
+ * @param enc_priv_key_file_inline True if enc_priv_key_file is an inline file
+ *
+ * @return                      1 if an error occurred, 0 if parsing was
+ *                              successful.
+ */
+int tls_ctx_load_priv_file_ntls(struct tls_root_ctx* ctx, const char* sign_priv_key_file,
+                                bool sign_priv_key_file_inline, const char* enc_priv_key_file,
+                                bool enc_priv_key_file_inline);
+#endif /* ifdef USE_NTLS */
 
 #ifdef ENABLE_MANAGEMENT
 
@@ -549,6 +679,20 @@ void
 show_available_tls_ciphers_list(const char *cipher_list,
                                 const char *tls_cert_profile,
                                 bool tls13);
+
+#ifdef USE_NTLS
+/*
+ * Show the NTLS ciphers that are available for us to use in the
+ * library. This function prints a list of ciphers without 
+ * headers/footers.
+ *
+ * @param cipher_list       list of allowed TLS cipher, or NULL.
+ * @param tls_cert_profile  TLS certificate crypto profile name.
+ */
+void
+show_available_tls_ciphers_list_ntls(const char* cipher_list,
+                                     const char* tls_cert_profile);
+#endif /* USE_NTLS */
 
 /*
  * Show the available elliptic curves in the crypto library

@@ -1018,6 +1018,9 @@ print_openssl_info(const struct options *options)
         {
             show_available_tls_ciphers(options->cipher_list,
                                        options->cipher_list_tls13,
+#ifdef USE_NTLS
+                                       options->cipher_list_ntls,
+#endif /* ifdef USE_NTLS */
                                        options->tls_cert_profile);
         }
         if (options->show_curves)
@@ -3434,7 +3437,11 @@ do_option_warnings(struct context *c)
         }
         if (!o->persist_key
 #ifdef ENABLE_PKCS11
+#ifdef USE_NTLS
+            && (o->use_ntls ? (!o->pkcs11_sign_id || !o->pkcs11_enc_id) : !o->pkcs11_id)
+#else
             && !o->pkcs11_id
+#endif
 #endif
             )
         {

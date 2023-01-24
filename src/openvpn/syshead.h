@@ -497,7 +497,7 @@ socket_defined(const socket_descriptor_t sd)
 /*
  * Do we have CryptoAPI capability?
  */
-#if defined(_WIN32) && defined(ENABLE_CRYPTO_OPENSSL)    \
+#if defined(_WIN32) && (defined(ENABLE_CRYPTO_OPENSSL) || defined(ENABLE_CRYPTO_TONGSUO))    \
     && !defined(ENABLE_CRYPTO_WOLFSSL)
 #define ENABLE_CRYPTOAPI
 #endif
@@ -535,6 +535,13 @@ socket_defined(const socket_descriptor_t sd)
  */
 #ifdef TARGET_LINUX
 #define ENABLE_MEMSTATS
+#endif
+
+/*
+ *  NTLS(GM/T 0024 SSL VPN, GB/T 38636 TLCP) support
+ */
+#if defined(ENABLE_CRYPTO_TONGSUO) && defined(HAVE_TONGSUO_NTLS)
+#define USE_NTLS
 #endif
 
 #endif /* ifndef SYSHEAD_H */
