@@ -2062,6 +2062,7 @@ show_settings(const struct options *o)
     }
 #endif /* ifdef USE_NTLS */
     SHOW_STR_INLINE(extra_certs_file);
+    
     if ((o->management_flags & MF_EXTERNAL_KEY))
     {
         SHOW_PARM("priv_key_file", "EXTERNAL_PRIVATE_KEY", "%s");
@@ -2087,6 +2088,7 @@ show_settings(const struct options *o)
     {
         SHOW_STR_INLINE(enc_priv_key_file);
     }
+#endif
 #ifndef ENABLE_CRYPTO_MBEDTLS
     SHOW_STR_INLINE(pkcs12_file);
 #endif
