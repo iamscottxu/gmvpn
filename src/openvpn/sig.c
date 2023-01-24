@@ -5,7 +5,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2022 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -47,16 +47,17 @@ struct signal_info siginfo_static; /* GLOBAL */
 
 struct signame {
     int value;
+    int priority;
     const char *upper;
     const char *lower;
 };
 
 static const struct signame signames[] = {
-    { SIGINT,  "SIGINT",  "sigint"},
-    { SIGTERM, "SIGTERM", "sigterm" },
-    { SIGHUP,  "SIGHUP",  "sighup" },
-    { SIGUSR1, "SIGUSR1", "sigusr1" },
-    { SIGUSR2, "SIGUSR2", "sigusr2" }
+    { SIGINT, 5, "SIGINT",  "sigint"},
+    { SIGTERM, 4, "SIGTERM", "sigterm" },
+    { SIGHUP, 3, "SIGHUP",  "sighup" },
+    { SIGUSR1, 2, "SIGUSR1", "sigusr1" },
+    { SIGUSR2, 1, "SIGUSR2", "sigusr2" }
 };
 
 int
@@ -68,6 +69,19 @@ parse_signal(const char *signame)
         if (!strcmp(signame, signames[i].upper))
         {
             return signames[i].value;
+        }
+    }
+    return -1;
+}
+
+static int
+signal_priority(int sig)
+{
+    for (size_t i = 0; i < SIZE(signames); ++i)
+    {
+        if (sig == signames[i].value)
+        {
+            return signames[i].priority;
         }
     }
     return -1;
@@ -103,19 +117,25 @@ signal_description(const int signum, const char *sigtext)
 void
 throw_signal(const int signum)
 {
-    siginfo_static.signal_received = signum;
-    siginfo_static.source = SIG_SOURCE_HARD;
+    if (signal_priority(signum) >= signal_priority(siginfo_static.signal_received))
+    {
+        siginfo_static.signal_received = signum;
+        siginfo_static.source = SIG_SOURCE_HARD;
+    }
 }
 
 void
 throw_signal_soft(const int signum, const char *signal_text)
 {
-    siginfo_static.signal_received = signum;
-    siginfo_static.source = SIG_SOURCE_SOFT;
-    siginfo_static.signal_text = signal_text;
+    if (signal_priority(signum) >= signal_priority(siginfo_static.signal_received))
+    {
+        siginfo_static.signal_received = signum;
+        siginfo_static.source = SIG_SOURCE_SOFT;
+        siginfo_static.signal_text = signal_text;
+    }
 }
 
-static void
+void
 signal_reset(struct signal_info *si)
 {
     if (si)
@@ -374,8 +394,7 @@ process_explicit_exit_notification_timer_wakeup(struct context *c)
         if (now >= c->c2.explicit_exit_notification_time_wait + c->options.ce.explicit_exit_notification)
         {
             event_timeout_clear(&c->c2.explicit_exit_notification_interval);
-            c->sig->signal_received = SIGTERM;
-            c->sig->signal_text = "exit-with-notification";
+            register_signal(c->sig, SIGTERM, "exit-with-notification");
         }
         else if (!cc_exit_notify_enabled(c))
         {
@@ -393,7 +412,7 @@ remap_signal(struct context *c)
 {
     if (c->sig->signal_received == SIGUSR1 && c->options.remap_sigusr1)
     {
-        c->sig->signal_received = c->options.remap_sigusr1;
+        register_signal(c->sig, c->options.remap_sigusr1, c->sig->signal_text);
     }
 }
 
@@ -442,7 +461,7 @@ ignore_restart_signals(struct context *c)
         {
             msg(M_INFO, "Converting soft %s received during exit notification to SIGTERM",
                 signal_name(c->sig->signal_received, true));
-            register_signal(c, SIGTERM, "exit-with-notification");
+            register_signal(c->sig, SIGTERM, "exit-with-notification");
             ret = false;
         }
     }
@@ -471,11 +490,12 @@ process_signal(struct context *c)
 }
 
 void
-register_signal(struct context *c, int sig, const char *text)
+register_signal(struct signal_info *si, int sig, const char *text)
 {
-    if (c->sig->signal_received != SIGTERM)
+    if (signal_priority(sig) >= signal_priority(si->signal_received))
     {
-        c->sig->signal_received = sig;
+        si->signal_received = sig;
+        si->signal_text = text;
+        si->source = SIG_SOURCE_SOFT;
     }
-    c->sig->signal_text = text;
 }

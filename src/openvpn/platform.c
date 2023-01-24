@@ -5,7 +5,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2022 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -246,7 +246,7 @@ platform_user_group_set(const struct platform_state_user *user_state,
     /* Change to new UID/GID.
      * capng_change_id() internally calls capng_apply() to apply prepared capabilities.
      */
-    res = capng_change_id(new_uid, new_gid, CAPNG_DROP_SUPP_GRP | CAPNG_CLEAR_BOUNDING);
+    res = capng_change_id(new_uid, new_gid, CAPNG_DROP_SUPP_GRP);
     if (res == -4 || res == -6)
     {
         /* -4 and -6 mean failure of setuid/gid respectively.

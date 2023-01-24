@@ -5,7 +5,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2022 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -52,6 +52,7 @@
 #include "crypto_backend.h"
 #include "ssl_util.h"
 #include "dco.h"
+#include "reflect_filter.h"
 
 /*#define MULTI_DEBUG_EVENT_LOOP*/
 
@@ -368,6 +369,8 @@ multi_init(struct multi_context *m, struct context *t, bool tcp_mode)
      */
     m->new_connection_limiter = frequency_limit_init(t->options.cf_max,
                                                      t->options.cf_per);
+    m->initial_rate_limiter = initial_rate_limit_init(t->options.cf_initial_max,
+                                                      t->options.cf_initial_per);
 
     /*
      * Allocate broadcast/multicast buffer list
@@ -473,6 +476,12 @@ multi_instance_string(const struct multi_instance *mi, bool null, struct gc_aren
             buf_printf(&out, "%s/", cn);
         }
         buf_printf(&out, "%s", mroute_addr_print(&mi->real, gc));
+        if (mi->context.c2.tls_multi
+            && check_debug_level(D_DCO_DEBUG)
+            && dco_enabled(&mi->context.options))
+        {
+            buf_printf(&out, " peer-id=%d", mi->context.c2.tls_multi->peer_id);
+        }
         return BSTR(&out);
     }
     else if (null)
@@ -729,6 +738,7 @@ multi_uninit(struct multi_context *m)
         mbuf_free(m->mbuf);
         ifconfig_pool_free(m->ifconfig_pool);
         frequency_limit_free(m->new_connection_limiter);
+        initial_rate_limit_free(m->initial_rate_limiter);
         multi_reap_free(m->reaper);
         mroute_helper_free(m->route_helper);
         multi_tcp_free(m->mtcp);
@@ -2364,7 +2374,7 @@ multi_client_generate_tls_keys(struct context *c)
                                           get_link_socket_info(c)))
     {
         msg(D_TLS_ERRORS, "TLS Error: initializing data channel failed");
-        register_signal(c, SIGUSR1, "process-push-msg-failed");
+        register_signal(c->sig, SIGUSR1, "process-push-msg-failed");
         return false;
     }
 
@@ -3234,6 +3244,13 @@ process_incoming_del_peer(struct multi_context *m, struct multi_instance *mi,
             reason = "ovpn-dco: transport error";
             break;
 
+#ifdef TARGET_LINUX
+        /* FIXME: this is linux-only today and breaks FreeBSD compilation */
+        case OVPN_DEL_PEER_REASON_TRANSPORT_DISCONNECT:
+            reason = "ovpn-dco: transport disconnected";
+            break;
+#endif
+
         case OVPN_DEL_PEER_REASON_USERSPACE:
             /* We assume that is ourselves. Unfortunately, sometimes these
              * events happen with enough delay that they can have an order of
@@ -3270,7 +3287,15 @@ multi_process_incoming_dco(struct multi_context *m)
 
     int peer_id = dco->dco_message_peer_id;
 
-    if ((peer_id >= 0) && (peer_id < m->max_clients) && (m->instances[peer_id]))
+    /* no peer-specific message delivered -> nothing to process.
+     * bail out right away
+     */
+    if (peer_id < 0)
+    {
+        return ret > 0;
+    }
+
+    if ((peer_id < m->max_clients) && (m->instances[peer_id]))
     {
         mi = m->instances[peer_id];
         if (dco->dco_message_type == OVPN_CMD_PACKET)
@@ -3288,12 +3313,17 @@ multi_process_incoming_dco(struct multi_context *m)
         if (dco->dco_message_type == OVPN_CMD_DEL_PEER
             && dco->dco_del_peer_reason == OVPN_DEL_PEER_REASON_USERSPACE)
         {
-            /* we get notified after we kill the peer ourselves and probably
-             * have already forgotten about it. This is expected */
+            /* we receive OVPN_CMD_DEL_PEER message with reason USERSPACE
+             * after we kill the peer ourselves. This peer may have already
+             * been deleted, so we end up here.
+             * In this case, print the following debug message with DCO_DEBUG
+             * level only to avoid polluting the standard DCO level with this
+             * harmless event.
+             */
             msglevel = D_DCO_DEBUG;
         }
-        msg(msglevel, "Received packet for peer-id unknown to OpenVPN: %d, "
-            "type %d, reason %d", peer_id, dco->dco_message_type,
+        msg(msglevel, "Received DCO message for unknown peer-id: %d, "
+            "type %d, del_peer_reason %d", peer_id, dco->dco_message_type,
             dco->dco_del_peer_reason);
         /* Also clear the buffer if this was incoming packet for a dropped peer */
         buf_init(&dco->dco_packet_in, 0);
@@ -3301,6 +3331,7 @@ multi_process_incoming_dco(struct multi_context *m)
 
     dco->dco_message_type = 0;
     dco->dco_message_peer_id = -1;
+    dco->dco_del_peer_reason = -1;
     dco->dco_read_bytes = 0;
     dco->dco_write_bytes = 0;
     return ret > 0;
@@ -3837,7 +3868,7 @@ multi_push_restart_schedule_exit(struct multi_context *m, bool next_server)
                        &m->deferred_shutdown_signal.wakeup,
                        compute_wakeup_sigma(&m->deferred_shutdown_signal.wakeup));
 
-    m->top.sig->signal_received = 0;
+    signal_reset(m->top.sig);
 }
 
 /*
@@ -3852,7 +3883,7 @@ multi_process_signal(struct multi_context *m)
         struct status_output *so = status_open(NULL, 0, M_INFO, NULL, 0);
         multi_print_status(m, so, m->status_file_version);
         status_close(so);
-        m->top.sig->signal_received = 0;
+        signal_reset(m->top.sig);
         return false;
     }
     else if (proto_is_dgram(m->top.options.ce.proto)

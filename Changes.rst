@@ -92,6 +92,10 @@ Cookie based handshake for UDP server
     shake. The tls-crypt-v2 option allows controlling if older clients are
     accepted.
 
+    By default the rate of initial packet responses is limited to 100 per 10s
+    interval to avoid OpenVPN servers being abused in reflection attacks
+    (see ``--connect-freq-initial``).
+
 Data channel offloading with ovpn-dco
     2.6.0+ implements support for data-channel offloading where the data packets
     are directly processed and forwarded in kernel space thanks to the ovpn-dco
@@ -179,6 +183,12 @@ PF (Packet Filtering) support has been removed
    This implies that also ``--management-client-pf`` and any other compile
    time or run time related option do not exist any longer.
 
+Option conflict checking is being deprecated and phased out
+    The static option checking (OCC) is no longer useful in typical setups
+    that negotiate most connection parameters. The ``--opt-verify`` and
+    ``--occ-disable`` options are deprecated, and the configure option
+    ``--enable-strict-options`` has been removed. Logging of mismatched
+    options has been moved to debug logging (verb 7).
 
 User-visible Changes
 --------------------

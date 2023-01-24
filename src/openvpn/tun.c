@@ -5,7 +5,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2022 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -1104,8 +1104,9 @@ do_ifconfig_ipv6(struct tuntap *tt, const char *ifname, int tun_mtu,
     openvpn_execve_check(&argv, es, S_FATAL,
                          "generic BSD ifconfig inet6 failed");
 
-#if defined(TARGET_FREEBSD) && __FreeBSD_version >= 1200000
-    /* On FreeBSD 12 and up, there is ipv6_activate_all_interfaces="YES"
+#if defined(TARGET_FREEBSD) && __FreeBSD_version >= 1200000 \
+    && __FreeBSD_version < 1204000
+    /* On FreeBSD 12.0-12.3, there is ipv6_activate_all_interfaces="YES"
      * in rc.conf, which is not set by default.  If it is *not* set,
      * "all new interfaces that are not already up" are configured by
      * devd + /etc/pccard_ether as "inet6 ifdisabled".
@@ -7026,6 +7027,25 @@ ipset2ascii_all(struct gc_arena *gc)
         buf_printf(&out, "[%s]", ipset2ascii(i));
     }
     return BSTR(&out);
+}
+
+const char *
+print_windows_driver(enum windows_driver_type windows_driver)
+{
+    switch (windows_driver)
+    {
+        case WINDOWS_DRIVER_TAP_WINDOWS6:
+            return "tap-windows6";
+
+        case WINDOWS_DRIVER_WINTUN:
+            return "wintun";
+
+        case WINDOWS_DRIVER_DCO:
+            return "ovpn-dco";
+
+        default:
+            return "unspecified";
+    }
 }
 
 #else /* generic */

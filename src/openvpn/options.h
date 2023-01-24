@@ -5,7 +5,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2022 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -445,8 +445,6 @@ struct options
     const char *management_client_user;
     const char *management_client_group;
 
-    /* Mask of MF_ values of manage.h */
-    unsigned int management_flags;
     const char *management_certificate;
 
 #ifdef USE_NTLS
@@ -454,6 +452,8 @@ struct options
     const char* management_encryption_certificate;
 #endif /* ifdef USE_NTLS */
 #endif
+    /* Mask of MF_ values of manage.h */
+    unsigned int management_flags;
 
 #ifdef ENABLE_PLUGIN
     struct plugin_option_list *plugin_list;
@@ -521,8 +521,13 @@ struct options
     bool push_ifconfig_ipv6_blocked;                    /* IPv6 */
     bool enable_c2c;
     bool duplicate_cn;
+
     int cf_max;
     int cf_per;
+
+    int cf_initial_max;
+    int cf_initial_per;
+
     int max_clients;
     int max_routes_per_client;
     int stale_routes_check_interval;

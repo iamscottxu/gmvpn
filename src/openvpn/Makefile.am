@@ -5,7 +5,7 @@
 #             packet encryption, packet authentication, and
 #             packet compression.
 #
-#  Copyright (C) 2002-2022 OpenVPN Inc <sales@openvpn.net>
+#  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
 #  Copyright (C) 2006-2012 Alon Bar-Lev <alon.barlev@gmail.com>
 #
 
@@ -113,6 +113,7 @@ openvpn_SOURCES = \
 	ps.c ps.h \
 	push.c push.h \
 	pushlist.h \
+	reflect_filter.c reflect_filter.h \
 	reliable.c reliable.h \
 	route.c route.h \
 	run_command.c run_command.h \

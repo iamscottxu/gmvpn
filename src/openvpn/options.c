@@ -5,8 +5,8 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2022 OpenVPN Inc <sales@openvpn.net>
- *  Copyright (C) 2008-2022 David Sommerseth <dazo@eurephia.org>
+ *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2008-2023 David Sommerseth <dazo@eurephia.org>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -364,7 +364,7 @@ static const char usage_message[] =
     "--status file [n] : Write operational status to file every n seconds.\n"
     "--status-version [n] : Choose the status file format version number.\n"
     "                  Currently, n can be 1, 2, or 3 (default=1).\n"
-    "--disable-occ   : Disable options consistency check between peers.\n"
+    "--disable-occ   : (DEPRECATED) Disable options consistency check between peers.\n"
 #ifdef ENABLE_DEBUG
     "--gremlin mask  : Special stress testing mode (for debugging only).\n"
 #endif
@@ -463,7 +463,7 @@ static const char usage_message[] =
     "                  OTP based two-factor auth mechanisms are in use and\n"
     "                  --reneg-* options are enabled. Optionally a lifetime in seconds\n"
     "                  for generated tokens can be set.\n"
-    "--opt-verify    : Clients that connect with options that are incompatible\n"
+    "--opt-verify    : (DEPRECATED) Clients that connect with options that are incompatible\n"
     "                  with those of the server will be disconnected.\n"
     "--auth-user-pass-optional : Allow connections by clients that don't\n"
     "                  specify a username/password.\n"
@@ -485,6 +485,7 @@ static const char usage_message[] =
     "                  as well as pushes it to connecting clients.\n"
     "--learn-address cmd : Run command cmd to validate client virtual addresses.\n"
     "--connect-freq n s : Allow a maximum of n new connections per s seconds.\n"
+    "--connect-freq-initial n s : Allow a maximum of n replies for initial connections attempts per s seconds.\n"
     "--max-clients n : Allow a maximum of n simultaneously connected clients.\n"
     "--max-routes-per-client n : Allow a maximum of n internal routes per client.\n"
     "--stale-routes-check n [t] : Remove routes with a last activity timestamp\n"
@@ -928,6 +929,8 @@ init_options(struct options *o, const bool init_gc)
     o->n_bcast_buf = 256;
     o->tcp_queue_limit = 64;
     o->max_clients = 1024;
+    o->cf_initial_per = 10;
+    o->cf_initial_max = 100;
     o->max_routes_per_client = 256;
     o->stale_routes_check_interval = 0;
     o->ifconfig_pool_persist_refresh_freq = 600;
@@ -1622,6 +1625,8 @@ show_p2mp_parms(const struct options *o)
     SHOW_BOOL(duplicate_cn);
     SHOW_INT(cf_max);
     SHOW_INT(cf_per);
+    SHOW_INT(cf_initial_max);
+    SHOW_INT(cf_initial_per);
     SHOW_INT(max_clients);
     SHOW_INT(max_routes_per_client);
     SHOW_STR(auth_user_pass_verify_script);
@@ -2030,60 +2035,58 @@ show_settings(const struct options *o)
     SHOW_STR_INLINE(ca_file);
     SHOW_STR(ca_path);
     SHOW_STR_INLINE(dh_file);
-#ifdef ENABLE_MANAGEMENT
     if ((o->management_flags & MF_EXTERNAL_CERT))
     {
         SHOW_PARM("cert_file", "EXTERNAL_CERT", "%s");
     }
     else
-#endif
-    SHOW_STR_INLINE(cert_file);
-    SHOW_STR_INLINE(extra_certs_file);
+    {
+        SHOW_STR_INLINE(cert_file);
+    }
 #ifdef USE_NTLS
-#ifdef ENABLE_MANAGEMENT
     if ((o->management_flags & MF_EXTERNAL_CERT))
     {
         SHOW_PARM("sign_cert_file", "EXTERNAL_SIGN_CERT", "%s");
     }
     else
-#endif /* ifdef ENABLE_MANAGEMENT */
-    SHOW_STR_INLINE(sign_cert_file);
-#ifdef ENABLE_MANAGEMENT
+    {
+        SHOW_STR_INLINE(sign_cert_file);
+    }
     if ((o->management_flags & MF_EXTERNAL_CERT))
     {
         SHOW_PARM("enc_cert_file", "EXTERNAL_ENC_CERT", "%s");
     }
     else
-#endif /* ifdef ENABLE_MANAGEMENT */
-    SHOW_STR_INLINE(enc_cert_file);
+    {
+        SHOW_STR_INLINE(enc_cert_file);
+    }
 #endif /* ifdef USE_NTLS */
-
-#ifdef ENABLE_MANAGEMENT
+    SHOW_STR_INLINE(extra_certs_file);
     if ((o->management_flags & MF_EXTERNAL_KEY))
     {
         SHOW_PARM("priv_key_file", "EXTERNAL_PRIVATE_KEY", "%s");
     }
     else
-#endif
-    SHOW_STR_INLINE(priv_key_file);
+    {
+        SHOW_STR_INLINE(priv_key_file);
+    }
 #ifdef USE_NTLS
-#ifdef ENABLE_MANAGEMENT
     if ((o->management_flags & MF_EXTERNAL_KEY))
     {
         SHOW_PARM("sign_priv_key_file", "EXTERNAL_SIGN_PRIVATE_KEY", "%s");
     }
     else
-#endif /* ifdef ENABLE_MANAGEMENT */
-    SHOW_STR_INLINE(sign_priv_key_file);
-#ifdef ENABLE_MANAGEMENT
+    {
+        SHOW_STR_INLINE(sign_priv_key_file);
+    }
     if ((o->management_flags & MF_EXTERNAL_KEY))
     {
         SHOW_PARM("enc_priv_key_file", "EXTERNAL_ENC_PRIVATE_KEY", "%s");
     }
     else
-#endif /* ifdef ENABLE_MANAGEMENT */
-    SHOW_STR_INLINE(enc_priv_key_file);
-#endif /* ifdef USE_NTLS */
+    {
+        SHOW_STR_INLINE(enc_priv_key_file);
+    }
 #ifndef ENABLE_CRYPTO_MBEDTLS
     SHOW_STR_INLINE(pkcs12_file);
 #endif
@@ -2570,7 +2573,7 @@ options_postprocess_verify_ce(const struct options *options,
 
 #endif /* ifdef ENABLE_MANAGEMENT */
 
-#if defined(ENABLE_MANAGEMENT) && !defined(HAVE_XKEY_PROVIDER)
+#if !defined(HAVE_XKEY_PROVIDER)
     if ((tls_version_max() >= TLS_VER_1_3)
         && (options->management_flags & MF_EXTERNAL_KEY)
         && !(options->management_flags & (MF_EXTERNAL_KEY_NOPADDING))
@@ -2976,8 +2979,6 @@ options_postprocess_verify_ce(const struct options *options,
         msg(M_WARN, "WARNING: Ignoring option 'tls-version-min' and 'tls-version-max' "
             "on NTLS enabled.");
     }
-
-#ifdef ENABLE_MANAGEMENT
     if (options->management_flags & MF_EXTERNAL_CERT) {
         const int sum = 
             (options->management_signature_certificate != NULL)
@@ -2988,8 +2989,6 @@ options_postprocess_verify_ce(const struct options *options,
             msg(M_USAGE, "If you use one of --management-external-sign-cert or --management-external-enc-cert, you must use them both");
         }
     }
-#endif /* ifdef ENABLE_MANAGEMENT */
-
 #ifdef ENABLE_PKCS11
     if (options->pkcs11_providers[0]) {
         const int sum =
@@ -3029,10 +3028,8 @@ options_postprocess_verify_ce(const struct options *options,
 #ifndef ENABLE_CRYPTO_MBEDTLS
         MUST_BE_UNDEF(enc_pkcs12_file, "--enc-pkcs12");
 #endif /* ifndef ENABLE_CRYPTO_MBEDTLS */
-#ifdef ENABLE_MANAGEMENT
         MUST_BE_UNDEF(management_signature_certificate, "--management-external-sign-cert");
         MUST_BE_UNDEF(management_encryption_certificate, "--management-external-enc-cert");
-#endif /* ifdef ENABLE_MANAGEMENT */
 #ifdef ENABLE_PKCS11
         MUST_BE_UNDEF(pkcs11_sign_id, "--pkcs11-sign-id");
         MUST_BE_UNDEF(pkcs11_enc_id, "--pkcs11-enc-id");
@@ -3051,9 +3048,7 @@ options_postprocess_verify_ce(const struct options *options,
 #ifndef ENABLE_CRYPTO_MBEDTLS
         MUST_BE_UNDEF(pkcs12_file, "--pkcs12");
 #endif /* ifndef ENABLE_CRYPTO_MBEDTLS */
-#ifdef ENABLE_MANAGEMENT
         MUST_BE_UNDEF(management_certificate, "--management-external-cert");
-#endif /* ifdef ENABLE_MANAGEMENT */
 #ifdef ENABLE_PKCS11
         MUST_BE_UNDEF(pkcs11_id, "--pkcs11-id");
 #endif /* ifdef ENABLE_PKCS11 */
@@ -3068,6 +3063,15 @@ options_postprocess_verify_ce(const struct options *options,
     {
         check_ca_required(options);
 #ifdef ENABLE_PKCS11
+        if (!options->pkcs11_providers[0] && options->pkcs11_id)
+        {
+            msg(M_WARN, "Option pkcs11-id is ignored as no pkcs11-providers are specified");
+        }
+        else if (!options->pkcs11_providers[0] && options->pkcs11_id_management)
+        {
+            msg(M_WARN, "Option pkcs11-id-management is ignored as no pkcs11-providers are specified");
+        }
+
         if (options->pkcs11_providers[0])
         {
             if (options->pkcs11_id_management && options->pkcs11_id != NULL)
@@ -3112,7 +3116,6 @@ options_postprocess_verify_ce(const struct options *options,
                 msg(M_USAGE, "Parameter --sign-key or --enc-key cannot be used when --pkcs11-provider is also specified.");
             }
 #endif /* ifdef USE_NTLS */
-#ifdef ENABLE_MANAGEMENT
             if (options->management_flags & MF_EXTERNAL_KEY)
             {
                 msg(M_USAGE, "Parameter --management-external-key cannot be used when --pkcs11-provider is also specified.");
@@ -3126,7 +3129,6 @@ options_postprocess_verify_ce(const struct options *options,
 #endif /* ifdef USE_NTLS */
                 msg(M_USAGE, "Parameter --management-external-cert cannot be used when --pkcs11-provider is also specified.");
             }
-#endif
             if (options->pkcs12_file)
             {
                 msg(M_USAGE, "Parameter --pkcs12 cannot be used when --pkcs11-provider is also specified.");
@@ -3146,7 +3148,6 @@ options_postprocess_verify_ce(const struct options *options,
         }
         else
 #endif /* ifdef ENABLE_PKCS11 */
-#ifdef ENABLE_MANAGEMENT
         if ((options->management_flags & MF_EXTERNAL_KEY) && options->priv_key_file)
         {
             msg(M_USAGE, "--key and --management-external-key are mutually exclusive");
@@ -3194,7 +3195,6 @@ options_postprocess_verify_ce(const struct options *options,
             }
         }
         else
-#endif
 #ifdef ENABLE_CRYPTOAPI
         if (options->cryptoapi_cert)
         {
@@ -3210,7 +3210,6 @@ options_postprocess_verify_ce(const struct options *options,
             {
                 msg(M_USAGE, "Parameter --pkcs12 cannot be used when --cryptoapicert is also specified.");
             }
-#ifdef ENABLE_MANAGEMENT
             if (options->management_flags & MF_EXTERNAL_KEY)
             {
                 msg(M_USAGE, "Parameter --management-external-key cannot be used when --cryptoapicert is also specified.");
@@ -3219,7 +3218,6 @@ options_postprocess_verify_ce(const struct options *options,
             {
                 msg(M_USAGE, "Parameter --management-external-cert cannot be used when --cryptoapicert is also specified.");
             }
-#endif
         }
         else
 #ifdef USE_NTLS
@@ -3237,7 +3235,6 @@ options_postprocess_verify_ce(const struct options *options,
             {
                 msg(M_USAGE, "Parameter --sign-pkcs12 cannot be used when --cryptoapisigncert is also specified.");
             }
-#ifdef ENABLE_MANAGEMENT
             if (options->management_flags & MF_EXTERNAL_KEY)
             {
                 msg(M_USAGE, "Parameter --management-external-key cannot be used when --cryptoapisigncert is also specified.");
@@ -3246,7 +3243,6 @@ options_postprocess_verify_ce(const struct options *options,
             {
                 msg(M_USAGE, "Parameter --management-external-sign-cert cannot be used when --cryptoapisigncert is also specified.");
             }
-#endif
         }
         else
         if (options->cryptoapi_enc_cert)
@@ -3263,7 +3259,6 @@ options_postprocess_verify_ce(const struct options *options,
             {
                 msg(M_USAGE, "Parameter --enc-pkcs12 cannot be used when --cryptoapienccert is also specified.");
             }
-#ifdef ENABLE_MANAGEMENT
             if (options->management_flags & MF_EXTERNAL_KEY)
             {
                 msg(M_USAGE, "Parameter --management-external-key cannot be used when --cryptoapisigncert is also specified.");
@@ -3272,7 +3267,6 @@ options_postprocess_verify_ce(const struct options *options,
             {
                 msg(M_USAGE, "Parameter --management-external-enc-cert cannot be used when --cryptoapienccert is also specified.");
             }
-#endif
         }
         else
 #endif /* ifdef USE_NTLS */
@@ -3294,7 +3288,6 @@ options_postprocess_verify_ce(const struct options *options,
             {
                 msg(M_USAGE, "Parameter --key cannot be used when --pkcs12 is also specified.");
             }
-#ifdef ENABLE_MANAGEMENT
             if (options->management_flags & MF_EXTERNAL_KEY)
             {
                 msg(M_USAGE, "Parameter --management-external-key cannot be used when --pkcs12 is also specified.");
@@ -3306,7 +3299,6 @@ options_postprocess_verify_ce(const struct options *options,
 #endif /* ifdef USE_NTLS */
                 msg(M_USAGE, "Parameter --management-external-cert cannot be used when --pkcs12 is also specified.");
             }
-#endif
 #endif /* ifdef ENABLE_CRYPTO_MBEDTLS */
         }
 #ifdef USE_NTLS
@@ -3327,7 +3319,6 @@ options_postprocess_verify_ce(const struct options *options,
             {
                 msg(M_USAGE, "Parameter --sign-key cannot be used when --sign-pkcs12 is also specified.");
             }
-#ifdef ENABLE_MANAGEMENT
             if (options->management_flags & MF_EXTERNAL_KEY)
             {
                 msg(M_USAGE, "Parameter --management-external-key cannot be used when --sign-pkcs12 is also specified.");
@@ -3337,7 +3328,6 @@ options_postprocess_verify_ce(const struct options *options,
                 if (!options->management_signature_certificate)
                 msg(M_USAGE, "Parameter --management-external-sign-cert cannot be used when --sign-pkcs12 is also specified.");
             }
-#endif /* ifdef ENABLE_MANAGEMENT */
 #endif /* ifdef ENABLE_CRYPTO_MBEDTLS */
         }
         else if (options->enc_pkcs12_file)
@@ -3357,7 +3347,6 @@ options_postprocess_verify_ce(const struct options *options,
             {
                 msg(M_USAGE, "Parameter --enc-key cannot be used when --enc-pkcs12 is also specified.");
             }
-#ifdef ENABLE_MANAGEMENT
             if (options->management_flags & MF_EXTERNAL_KEY)
             {
                 msg(M_USAGE, "Parameter --management-external-key cannot be used when --enc-pkcs12 is also specified.");
@@ -3367,7 +3356,6 @@ options_postprocess_verify_ce(const struct options *options,
                 if (!options->management_encryption_certificate)
                 msg(M_USAGE, "Parameter --management-external-enc-cert cannot be used when --enc-pkcs12 is also specified.");
             }
-#endif /* ifdef ENABLE_MANAGEMENT */
 #endif /* ifdef ENABLE_CRYPTO_MBEDTLS */
         }
 #endif /* ifdef USE_NTLS */
@@ -3384,15 +3372,10 @@ options_postprocess_verify_ce(const struct options *options,
             {
 
                 const int sum =
-#ifdef ENABLE_MANAGEMENT
                 ((options->sign_cert_file != NULL) || (options->management_flags & MF_EXTERNAL_CERT && options->management_signature_certificate != NULL))
                     + ((options->sign_priv_key_file != NULL) || (options->management_flags & MF_EXTERNAL_KEY))
                     + ((options->enc_cert_file != NULL) || (options->management_flags & MF_EXTERNAL_CERT && options->management_encryption_certificate != NULL))
                     + ((options->enc_priv_key_file != NULL) || (options->management_flags & MF_EXTERNAL_KEY));
-#else
-                    (options->sign_cert_file != NULL) + (options->sign_priv_key_file != NULL)
-                    + (options->enc_cert_file != NULL) + (options->enc_priv_key_file != NULL);
-#endif /* ifdef ENABLE_MANAGEMENT */
 
                 if (sum == 0)
                 {
@@ -3416,12 +3399,8 @@ options_postprocess_verify_ce(const struct options *options,
             {
 
                 const int sum =
-#ifdef ENABLE_MANAGEMENT
                     ((options->cert_file != NULL) || (options->management_flags & MF_EXTERNAL_CERT))
-                    +((options->priv_key_file != NULL) || (options->management_flags & MF_EXTERNAL_KEY));
-#else
-                    (options->cert_file != NULL) + (options->priv_key_file != NULL);
-#endif
+                    + ((options->priv_key_file != NULL) || (options->management_flags & MF_EXTERNAL_KEY));
 
                 if (sum == 0)
                 {
@@ -3440,26 +3419,26 @@ options_postprocess_verify_ce(const struct options *options,
             }
             else
             {
-#ifdef ENABLE_MANAGEMENT
                 if (!(options->management_flags & MF_EXTERNAL_CERT))
-#endif
+                {
 #ifdef USE_NTLS
-                if (options->use_ntls) {
-                    notnull(options->sign_cert_file, "signature certificate file (--sign-cert) or PKCS#12 file (--sign-pkcs12)");
-                    notnull(options->enc_cert_file, "encryption certificate file (--enc-cert) or PKCS#12 file (--enc-pkcs12)");
-                } else 
+                    if (options->use_ntls) {
+                        notnull(options->sign_cert_file, "signature certificate file (--sign-cert) or PKCS#12 file (--sign-pkcs12)");
+                        notnull(options->enc_cert_file, "encryption certificate file (--enc-cert) or PKCS#12 file (--enc-pkcs12)");
+                    } else 
 #endif /* ifdef USE_NTLS */
-                notnull(options->cert_file, "certificate file (--cert) or PKCS#12 file (--pkcs12)");
-#ifdef ENABLE_MANAGEMENT
+                    notnull(options->cert_file, "certificate file (--cert) or PKCS#12 file (--pkcs12)");
+                }
                 if (!(options->management_flags & MF_EXTERNAL_KEY))
-#endif
+                {
 #ifdef USE_NTLS
-                if (options->use_ntls) {
-                    notnull(options->sign_priv_key_file, "signature private key file (--sign-key) or PKCS#12 file (--sign-pkcs12)");
-                    notnull(options->enc_priv_key_file, "encryption private key file (--enc-key) or PKCS#12 file (--enc-pkcs12)");
-                } else 
+                    if (options->use_ntls) {
+                        notnull(options->sign_priv_key_file, "signature private key file (--sign-key) or PKCS#12 file (--sign-pkcs12)");
+                        notnull(options->enc_priv_key_file, "encryption private key file (--enc-key) or PKCS#12 file (--enc-pkcs12)");
+                    } else 
 #endif /* ifdef USE_NTLS */
-                notnull(options->priv_key_file, "private key file (--key) or PKCS#12 file (--pkcs12)");
+                    notnull(options->priv_key_file, "private key file (--key) or PKCS#12 file (--pkcs12)");
+                }
             }
         }
         if (ce->tls_auth_file && ce->tls_crypt_file)
@@ -4506,9 +4485,7 @@ options_postprocess_filechecks(struct options *options)
                                      options->extra_certs_file, R_OK,
                                      "--extra-certs");
 
-#ifdef ENABLE_MANAGMENT
     if (!(options->management_flags & MF_EXTERNAL_KEY))
-#endif
     {
         errs |= check_file_access_inline(options->priv_key_file_inline,
                                          CHKACC_FILE|CHKACC_PRIVATE,
@@ -5085,15 +5062,15 @@ options_cmp_equal_safe(char *actual, const char *expected, size_t actual_n)
     if (actual_n > 0)
     {
         actual[actual_n - 1] = 0;
-#ifndef ENABLE_STRICT_OPTIONS_CHECK
         if (strncmp(actual, expected, 2))
         {
             msg(D_SHOW_OCC, "NOTE: Options consistency check may be skewed by version differences");
             options_warning_safe_ml(D_SHOW_OCC, actual, expected, actual_n);
         }
         else
-#endif
-        ret = !strcmp(actual, expected);
+        {
+            ret = !strcmp(actual, expected);
+        }
     }
     gc_free(&gc);
     return ret;
@@ -5102,7 +5079,7 @@ options_cmp_equal_safe(char *actual, const char *expected, size_t actual_n)
 void
 options_warning_safe(char *actual, const char *expected, size_t actual_n)
 {
-    options_warning_safe_ml(M_WARN, actual, expected, actual_n);
+    options_warning_safe_ml(D_SHOW_OCC, actual, expected, actual_n);
 }
 
 const char *
@@ -5354,7 +5331,7 @@ usage_version(void)
     show_windows_version( M_INFO|M_NOPREFIX );
 #endif
     msg(M_INFO|M_NOPREFIX, "Originally developed by James Yonan");
-    msg(M_INFO|M_NOPREFIX, "Copyright (C) 2002-2022 OpenVPN Inc <sales@openvpn.net>");
+    msg(M_INFO|M_NOPREFIX, "Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>");
 #ifndef ENABLE_SMALL
 #ifdef CONFIGURE_DEFINES
     msg(M_INFO|M_NOPREFIX, "Compile time defines: %s", CONFIGURE_DEFINES);
@@ -6174,9 +6151,7 @@ bool
 key_is_external(const struct options *options)
 {
     bool ret = false;
-#ifdef ENABLE_MANAGEMENT
     ret = ret || (options->management_flags & MF_EXTERNAL_KEY);
-#endif
 #ifdef ENABLE_PKCS11
     ret = ret || (options->pkcs11_providers[0] != NULL);
 #endif
@@ -6388,7 +6363,6 @@ add_option(struct options *options,
         VERIFY_PERMISSION(OPT_P_GENERAL);
         options->management_flags |= MF_CONNECT_AS_CLIENT;
     }
-#ifdef ENABLE_MANAGEMENT
     else if (streq(p[0], "management-external-key"))
     {
         VERIFY_PERMISSION(OPT_P_GENERAL);
@@ -6451,7 +6425,6 @@ add_option(struct options *options,
         VERIFY_PERMISSION(OPT_P_GENERAL);
         options->management_flags |= MF_CLIENT_AUTH;
     }
-#endif /* ifdef ENABLE_MANAGEMENT */
     else if (streq(p[0], "management-log-cache") && p[1] && !p[2])
     {
         int cache;
@@ -7994,6 +7967,22 @@ add_option(struct options *options,
         options->cf_max = cf_max;
         options->cf_per = cf_per;
     }
+    else if (streq(p[0], "connect-freq-initial") && p[1] && p[2] && !p[3])
+    {
+        long cf_max, cf_per;
+
+        VERIFY_PERMISSION(OPT_P_GENERAL);
+        char *e1, *e2;
+        cf_max = strtol(p[1], &e1, 10);
+        cf_per = strtol(p[2], &e2, 10);
+        if (cf_max < 0 || cf_per < 0 || *e1 != '\0' || *e2 != '\0')
+        {
+            msg(msglevel, "--connect-freq-initial parameters must be integers and >= 0");
+            goto err;
+        }
+        options->cf_initial_max = cf_max;
+        options->cf_initial_per = cf_per;
+    }
     else if (streq(p[0], "max-clients") && p[1] && !p[2])
     {
         int max_clients;
@@ -8059,6 +8048,8 @@ add_option(struct options *options,
     else if (streq(p[0], "opt-verify") && !p[1])
     {
         VERIFY_PERMISSION(OPT_P_GENERAL);
+        msg(M_INFO, "DEPRECATION: opt-verify is deprecated and will be removed "
+            "in OpenVPN 2.7");
         options->ssl_flags |= SSLF_OPT_VERIFY;
     }
     else if (streq(p[0], "auth-user-pass-verify") && p[1])

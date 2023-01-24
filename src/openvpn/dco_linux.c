@@ -1,9 +1,9 @@
 /*
  *  Interface to linux dco networking code
  *
- *  Copyright (C) 2020-2022 Antonio Quartulli <a@unstable.cc>
- *  Copyright (C) 2020-2022 Arne Schwabe <arne@rfc2549.org>
- *  Copyright (C) 2020-2022 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2020-2023 Antonio Quartulli <a@unstable.cc>
+ *  Copyright (C) 2020-2023 Arne Schwabe <arne@rfc2549.org>
+ *  Copyright (C) 2020-2023 OpenVPN Inc <sales@openvpn.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -375,6 +375,11 @@ ovpn_dco_init_netlink(dco_context_t *dco)
      * wrong sequence numbers (NLE_SEQ_MISMATCH), so disable libnl's sequence
      * number check */
     nl_socket_disable_seq_check(dco->nl_sock);
+
+    /* nl library sets the buffer size to 32k/32k by default which is sometimes
+     * overrun with very fast connecting/disconnecting clients.
+     * TODO: fix this in a better and more reliable way */
+    ASSERT(!nl_socket_set_buffer_size(dco->nl_sock, 1024*1024, 1024*1024));
 }
 
 bool

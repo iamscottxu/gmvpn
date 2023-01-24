@@ -5,7 +5,7 @@
  *             packet encryption, packet authentication, and
  *             packet compression.
  *
- *  Copyright (C) 2002-2022 OpenVPN Inc <sales@openvpn.net>
+ *  Copyright (C) 2002-2023 OpenVPN Inc <sales@openvpn.net>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2
@@ -353,13 +353,15 @@ management_callback_remote_entry_get(void *arg, unsigned int index, char **remot
     {
         struct connection_entry *ce = l->array[index];
         const char *proto = proto2ascii(ce->proto, ce->af, false);
+        const char *status = (ce->flags & CE_DISABLED) ? "disabled" : "enabled";
 
-        /* space for output including 2 commas and a nul */
-        int len = strlen(ce->remote) + strlen(ce->remote_port) + strlen(proto) + 2 + 1;
+        /* space for output including 3 commas and a nul */
+        int len = strlen(ce->remote) + strlen(ce->remote_port) + strlen(proto)
+                  + strlen(status) + 3 + 1;
         char *out = malloc(len);
         check_malloc_return(out);
 
-        openvpn_snprintf(out, len, "%s,%s,%s", ce->remote, ce->remote_port, proto);
+        openvpn_snprintf(out, len, "%s,%s,%s,%s", ce->remote, ce->remote_port, proto, status);
         *remote = out;
     }
     else
@@ -1651,6 +1653,15 @@ initialization_sequence_completed(struct context *c, const unsigned int flags)
         {
             detail = "ERROR";
         }
+        /* Flag route error only on platforms where trivial "already exists" errors
+         * are filtered out. Currently this is the case on Windows or if usng netlink.
+         */
+#if defined(_WIN32) || defined(ENABLE_SITNL)
+        else if (flags & ISC_ROUTE_ERRORS)
+        {
+            detail = "ROUTE_ERROR";
+        }
+#endif
 
         CLEAR(local);
         actual = &get_link_socket_info(c)->lsa->actual;
@@ -1700,7 +1711,7 @@ initialization_sequence_completed(struct context *c, const unsigned int flags)
  * Possibly add routes and/or call route-up script
  * based on options.
  */
-void
+bool
 do_route(const struct options *options,
          struct route_list *route_list,
          struct route_ipv6_list *route_ipv6_list,
@@ -1709,10 +1720,11 @@ do_route(const struct options *options,
          struct env_set *es,
          openvpn_net_ctx_t *ctx)
 {
+    bool ret = true;
     if (!options->route_noexec && ( route_list || route_ipv6_list ) )
     {
-        add_routes(route_list, route_ipv6_list, tt, ROUTE_OPTION_FLAGS(options),
-                   es, ctx);
+        ret = add_routes(route_list, route_ipv6_list, tt, ROUTE_OPTION_FLAGS(options),
+                         es, ctx);
         setenv_int(es, "redirect_gateway", route_did_redirect_default_gateway(route_list));
     }
 #ifdef ENABLE_MANAGEMENT
@@ -1751,6 +1763,7 @@ do_route(const struct options *options,
         show_adapters(D_SHOW_NET|M_NOPREFIX);
     }
 #endif
+    return ret;
 }
 
 /*
@@ -1801,10 +1814,11 @@ can_preserve_tun(struct tuntap *tt)
 }
 
 static bool
-do_open_tun(struct context *c)
+do_open_tun(struct context *c, int *error_flags)
 {
     struct gc_arena gc = gc_new();
     bool ret = false;
+    *error_flags = 0;
 
     if (!can_preserve_tun(c->c1.tuntap))
     {
@@ -1871,8 +1885,9 @@ do_open_tun(struct context *c)
         if (route_order() == ROUTE_BEFORE_TUN)
         {
             /* Ignore route_delay, would cause ROUTE_BEFORE_TUN to be ignored */
-            do_route(&c->options, c->c1.route_list, c->c1.route_ipv6_list,
-                     c->c1.tuntap, c->plugins, c->c2.es, &c->net_ctx);
+            bool status = do_route(&c->options, c->c1.route_list, c->c1.route_ipv6_list,
+                                   c->c1.tuntap, c->plugins, c->c2.es, &c->net_ctx);
+            *error_flags |= (status ? 0 : ISC_ROUTE_ERRORS);
         }
 #ifdef TARGET_ANDROID
         /* Store the old fd inside the fd so open_tun can use it */
@@ -1933,8 +1948,9 @@ do_open_tun(struct context *c)
         /* possibly add routes */
         if ((route_order() == ROUTE_AFTER_TUN) && (!c->options.route_delay_defined))
         {
-            do_route(&c->options, c->c1.route_list, c->c1.route_ipv6_list,
-                     c->c1.tuntap, c->plugins, c->c2.es, &c->net_ctx);
+            int status = do_route(&c->options, c->c1.route_list, c->c1.route_ipv6_list,
+                                  c->c1.tuntap, c->plugins, c->c2.es, &c->net_ctx);
+            *error_flags |= (status ? 0 : ISC_ROUTE_ERRORS);
         }
 
         ret = true;
@@ -2230,6 +2246,7 @@ do_deferred_options_part2(struct context *c)
 bool
 do_up(struct context *c, bool pulled_options, unsigned int option_types_found)
 {
+    int error_flags = 0;
     if (!c->c2.do_up_ran)
     {
         reset_coarse_timers(c);
@@ -2246,7 +2263,7 @@ do_up(struct context *c, bool pulled_options, unsigned int option_types_found)
         /* if --up-delay specified, open tun, do ifconfig, and run up script now */
         if (c->options.up_delay || PULL_DEFINED(&c->options))
         {
-            c->c2.did_open_tun = do_open_tun(c);
+            c->c2.did_open_tun = do_open_tun(c, &error_flags);
             update_time();
 
             /*
@@ -2275,7 +2292,7 @@ do_up(struct context *c, bool pulled_options, unsigned int option_types_found)
                 else
                 {
                     management_sleep(1);
-                    c->c2.did_open_tun = do_open_tun(c);
+                    c->c2.did_open_tun = do_open_tun(c, &error_flags);
                     update_time();
                 }
             }
@@ -2348,12 +2365,12 @@ do_up(struct context *c, bool pulled_options, unsigned int option_types_found)
             }
             else
             {
-                initialization_sequence_completed(c, 0); /* client/p2p --route-delay undefined */
+                initialization_sequence_completed(c, error_flags); /* client/p2p --route-delay undefined */
             }
         }
         else if (c->options.mode == MODE_POINT_TO_POINT)
         {
-            initialization_sequence_completed(c, 0); /* client/p2p restart with --persist-tun */
+            initialization_sequence_completed(c, error_flags); /* client/p2p restart with --persist-tun */
         }
 
         c->c2.do_up_ran = true;
@@ -2991,13 +3008,13 @@ do_init_crypto_tls_c1(struct context *c)
                 /* Intentional [[fallthrough]]; */
 
                 case AR_NOINTERACT:
-                    c->sig->signal_received = SIGUSR1; /* SOFT-SIGUSR1 -- Password failure error */
+                    /* SOFT-SIGUSR1 -- Password failure error */
+                    register_signal(c->sig, SIGUSR1, "private-key-password-failure");
                     break;
 
                 default:
                     ASSERT(0);
             }
-            c->sig->signal_text = "private-key-password-failure";
             return;
         }
 
@@ -3160,8 +3177,6 @@ do_init_crypto_tls(struct context *c, const unsigned int flags)
     {
         to.xmit_hold = true;
     }
-
-    to.disable_occ = !options->occ;
 
     to.verify_command = options->tls_verify;
     to.verify_export_cert = options->tls_export_cert;
@@ -4292,9 +4307,7 @@ init_instance(struct context *c, const struct env_set *env, const unsigned int f
     }
 
     /* signals caught here will abort */
-    c->sig->signal_received = 0;
-    c->sig->signal_text = NULL;
-    c->sig->source = SIG_SOURCE_SOFT;
+    signal_reset(c->sig);
 
     if (c->mode == CM_P2P)
     {
@@ -4490,7 +4503,8 @@ init_instance(struct context *c, const struct env_set *env, const unsigned int f
      * open tun/tap device, ifconfig, run up script, etc. */
     if (!(options->up_delay || PULL_DEFINED(options)) && (c->mode == CM_P2P || c->mode == CM_TOP))
     {
-        c->c2.did_open_tun = do_open_tun(c);
+        int error_flags = 0;
+        c->c2.did_open_tun = do_open_tun(c, &error_flags);
     }
 
     c->c2.frame_initial = c->c2.frame;
@@ -4796,7 +4810,7 @@ close_context(struct context *c, int sig, unsigned int flags)
 
     if (sig >= 0)
     {
-        c->sig->signal_received = sig;
+        register_signal(c->sig, sig, "close_context");
     }
 
     if (c->sig->signal_received == SIGUSR1)
@@ -4804,8 +4818,7 @@ close_context(struct context *c, int sig, unsigned int flags)
         if ((flags & CC_USR1_TO_HUP)
             || (c->sig->source == SIG_SOURCE_HARD && (flags & CC_HARD_USR1_TO_HUP)))
         {
-            c->sig->signal_received = SIGHUP;
-            c->sig->signal_text = "close_context usr1 to hup";
+            register_signal(c->sig, SIGHUP, "close_context usr1 to hup");
         }
     }
 
