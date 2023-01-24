@@ -3379,6 +3379,39 @@ options_postprocess_verify_ce(const struct options *options,
                 msg(M_USAGE, "Parameter --capath cannot be used with the mbed TLS version version of OpenVPN.");
             }
 #endif  /* ifdef ENABLE_CRYPTO_MBEDTLS */
+#ifdef USE_NTLS
+            if (pull & options->use_ntls)
+            {
+
+                const int sum =
+#ifdef ENABLE_MANAGEMENT
+                ((options->sign_cert_file != NULL) || (options->management_flags & MF_EXTERNAL_CERT && options->management_signature_certificate != NULL))
+                    + ((options->sign_priv_key_file != NULL) || (options->management_flags & MF_EXTERNAL_KEY))
+                    + ((options->enc_cert_file != NULL) || (options->management_flags & MF_EXTERNAL_CERT && options->management_encryption_certificate != NULL))
+                    + ((options->enc_priv_key_file != NULL) || (options->management_flags & MF_EXTERNAL_KEY));
+#else
+                    (options->sign_cert_file != NULL) + (options->sign_priv_key_file != NULL)
+                    + (options->enc_cert_file != NULL) + (options->enc_priv_key_file != NULL);
+#endif /* ifdef ENABLE_MANAGEMENT */
+
+                if (sum == 0)
+                {
+                    if (!options->auth_user_pass_file)
+                    {
+                        msg(M_USAGE, "No client-side authentication method is "
+                            "specified.  You must use either "
+                            "--sign-cert/--sign-key/--enc-cert/--enc-key, "
+                            "--sign-pkcs12/--enc-pkcs12, or "
+                            "--auth-user-pass");
+                    }
+                }
+                else if (sum != 4)
+                {
+                    msg(M_USAGE, "If you use one of --sign-cert, --enc-cert, --sign-key or --enc-key, you must use them both");
+                }
+            }
+            else
+#endif /* ifdef USE_NTLS */
             if (pull)
             {
 
