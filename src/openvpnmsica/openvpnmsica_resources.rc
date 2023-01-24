@@ -45,13 +45,13 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "The OpenVPN Project"
-            VALUE "FileDescription", "Custom Action DLL to provide OpenVPN-specific support to MSI packages"
+            VALUE "CompanyName", "The GmVPN Project"
+            VALUE "FileDescription", "Custom Action DLL to provide GmVPN-specific support to MSI packages"
             VALUE "FileVersion", PACKAGE_VERSION ".0"
-            VALUE "InternalName", "OpenVPN"
-            VALUE "LegalCopyright", "Copyright © The OpenVPN Project"
-            VALUE "OriginalFilename", "libopenvpnmsica.dll"
-            VALUE "ProductName", "OpenVPN"
+            VALUE "InternalName", "GmVPN"
+            VALUE "LegalCopyright", "Copyright © The GmVPN Project"
+            VALUE "OriginalFilename", "libgmvpnmsica.dll"
+            VALUE "ProductName", "GmVPN"
             VALUE "ProductVersion", PACKAGE_VERSION ".0"
         END
     END
