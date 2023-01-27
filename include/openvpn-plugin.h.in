@@ -336,7 +336,8 @@ struct openvpn_plugin_callbacks
 typedef enum {
     SSLAPI_NONE,
     SSLAPI_OPENSSL,
-    SSLAPI_MBEDTLS
+    SSLAPI_MBEDTLS,
+    SSLAPI_TONGSUO = 20
 } ovpnSSLAPI;
 
 /**
