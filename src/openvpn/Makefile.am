@@ -51,6 +51,7 @@ openvpn_SOURCES = \
 	comp-lz4.c comp-lz4.h \
 	crypto.c crypto.h crypto_backend.h \
 	crypto_openssl.c crypto_openssl.h \
+	crypto_tongsuo.c crypto_tongsuo.h \
 	crypto_mbedtls.c crypto_mbedtls.h \
 	dco.c dco.h dco_internal.h \
 	dco_freebsd.c dco_freebsd.h \
@@ -96,8 +97,10 @@ openvpn_SOURCES = \
 	ntlm.c ntlm.h \
 	occ.c occ.h \
 	openssl_compat.h \
+	tongsuo_compat.h \
 	pkcs11.c pkcs11.h pkcs11_backend.h \
 	pkcs11_openssl.c \
+	pkcs11_tongsuo.c \
 	pkcs11_mbedtls.c \
 	openvpn.c openvpn.h \
 	options.c options.h \
@@ -125,6 +128,7 @@ openvpn_SOURCES = \
 	socks.c socks.h \
 	ssl.c ssl.h  ssl_backend.h \
 	ssl_openssl.c ssl_openssl.h \
+	ssl_tongsuo.c ssl_tongsuo.h \
 	ssl_mbedtls.c ssl_mbedtls.h \
 	ssl_ncp.c ssl_ncp.h \
 	ssl_pkt.c ssl_pkt.h \
@@ -132,6 +136,7 @@ openvpn_SOURCES = \
 	ssl_common.h \
 	ssl_verify.c ssl_verify.h ssl_verify_backend.h \
 	ssl_verify_openssl.c ssl_verify_openssl.h \
+	ssl_verify_tongsuo.c ssl_verify_tongsuo.h \
 	ssl_verify_mbedtls.c ssl_verify_mbedtls.h \
 	status.c status.h \
 	syshead.h \
