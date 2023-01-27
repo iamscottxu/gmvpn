@@ -56,7 +56,7 @@ m4_define([serial_tests], [
 ])
 # This foreign option prevents autoreconf from overriding our COPYING and
 # INSTALL targets:
-AM_INIT_AUTOMAKE(foreign serial_tests 1.9) dnl NB: Do not [quote] this parameter.
+AM_INIT_AUTOMAKE(subdir-objects foreign serial_tests 1.9) dnl NB: Do not [quote] this parameter.
 AC_CANONICAL_HOST
 AC_USE_SYSTEM_EXTENSIONS
 
@@ -257,14 +257,14 @@ AC_ARG_WITH(
 
 AC_ARG_WITH(
 	[crypto-library],
-	[AS_HELP_STRING([--with-crypto-library=library], [build with the given crypto library, TYPE=openssl|mbedtls|wolfssl @<:@default=openssl@:>@])],
+	[AS_HELP_STRING([--with-crypto-library=library], [build with the given crypto library, TYPE=tongsuo|openssl|mbedtls|wolfssl @<:@default=tongsuo@:>@])],
 	[
 		case "${withval}" in
 			openssl|mbedtls|wolfssl) ;;
 			*) AC_MSG_ERROR([bad value ${withval} for --with-crypto-library]) ;;
 		esac
 	],
-	[with_crypto_library="openssl"]
+	[with_crypto_library="tongsuo"]
 )
 
 AC_ARG_ENABLE(
@@ -334,6 +334,14 @@ case "$host" in
 		CPPFLAGS="${CPPFLAGS} -DNTDDI_VERSION=NTDDI_VISTA -D_WIN32_WINNT=_WIN32_WINNT_VISTA"
 		WIN32=yes
 		;;
+	*-msys)
+		AC_DEFINE([TARGET_WIN32], [1], [Are we running WIN32?])
+		AC_DEFINE([ENABLE_DCO], [1], [DCO is always enabled on Windows])
+		AC_DEFINE_UNQUOTED([TARGET_PREFIX], ["W"], [Target prefix])
+		CPPFLAGS="${CPPFLAGS} -DWIN32_LEAN_AND_MEAN"
+		CPPFLAGS="${CPPFLAGS} -DNTDDI_VERSION=NTDDI_VISTA -D_WIN32_WINNT=_WIN32_WINNT_VISTA"
+		WIN32=yes
+		;;
 	*-*-dragonfly*)
 		AC_DEFINE([TARGET_DRAGONFLY], [1], [Are we running on DragonFlyBSD?])
 		AC_DEFINE_UNQUOTED([TARGET_PREFIX], ["D"], [Target prefix])
@@ -349,6 +357,14 @@ case "$host" in
 		AC_DEFINE_UNQUOTED([TARGET_PREFIX], ["X"], [Target prefix])
 		have_tap_header="yes"
 		;;
+esac
+
+case "${CC}" in
+	*cl.exe) 
+	  RC="$am_aux_dir/build/windres-rc rc.exe" 
+	  CL="${CL} -w"
+	  CPPFLAGS="${CPPFLAGS} -nologo"
+	  ;;
 esac
 
 PKG_PROG_PKG_CONFIG
@@ -386,12 +402,6 @@ AC_CHECK_PROGS([RST2MAN], [rst2man rst2man.py])
 AC_CHECK_PROGS([RST2HTML], [rst2html rst2html.py])
 AM_CONDITIONAL([HAVE_PYDOCUTILS], [test "${RST2MAN}" -a "${RST2HTML}"])
 
-# Set -std=c99 unless user already specified a -std=
-case "${CFLAGS}" in
-  *-std=*) ;;
-  *)       CFLAGS="${CFLAGS} -std=c99" ;;
-esac
-
 #
 # Libtool
 #
@@ -415,7 +425,7 @@ AC_TYPE_OFF_T
 AC_TYPE_PID_T
 AC_TYPE_SIZE_T
 AC_TYPE_UID_T
-AC_TYPE_SIGNAL
+dnl AC_TYPE_SIGNAL
 AX_TYPE_SOCKLEN_T
 AC_CHECK_SIZEOF([unsigned int])
 AC_CHECK_SIZEOF([unsigned long])
@@ -449,9 +459,6 @@ SOCKET_INCLUDES="
 #endif
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
-#endif
-#ifdef _WIN32
-#include <windows.h>
 #endif
 #ifdef _WIN32
 #include <winsock2.h>
@@ -534,7 +541,7 @@ AC_CHECK_DECLS(
 	,
 	[[${SOCKET_INCLUDES}]]
 )
-AC_CHECKING([anonymous union support])
+AC_MSG_NOTICE([anonymous union support])
 AC_COMPILE_IFELSE(
 	[AC_LANG_PROGRAM(
 		[[
@@ -581,6 +588,62 @@ AC_LINK_IFELSE(
 )
 LDFLAGS="$saved_LDFLAGS"
 
+AC_CHECK_TYPE(
+	[ssize_t],
+	,
+	[
+		AC_CHECK_TYPE(
+			[SSIZE_T],
+			[AC_DEFINE([ssize_t], [SSIZE_T], [ssize_t replacement])],
+			[AC_MSG_ERROR([Could not find SSIZE_T.])],
+			[[
+				#include <basetsd.h>
+			]]
+		)
+	],
+	[[
+		#include <stddef.h>
+	]]
+)
+
+AC_CHECK_DECL(
+	[strncasecmp],
+	,
+	[
+		AC_CHECK_DECL(
+			[strnicmp],
+			[AC_DEFINE([strncasecmp], [strnicmp], [strncasecmp replacement])],
+			[AC_MSG_ERROR([Could not find strnicmp.])],
+			[[
+				#include <string.h>
+			]]
+		)
+	],
+	[[
+		#include <string.h>
+		#include <strings.h>
+	]]
+)
+
+AC_CHECK_DECL(
+	[strcasecmp],
+	,
+	[
+		AC_CHECK_DECL(
+			[_stricmp],
+			[AC_DEFINE([strcasecmp], [_stricmp], [strcasecmp replacement])],
+			[AC_MSG_ERROR([Could not find _stricmp.])],
+			[[
+				#include <string.h>
+			]]
+		)
+	],
+	[[
+		#include <string.h>
+		#include <strings.h>
+	]]
+)
+
 dnl We emulate signals in Windows
 AC_CHECK_DECLS(
 	[SIGHUP],
@@ -620,6 +683,66 @@ AC_CHECK_DECLS(
 	[AC_DEFINE([SIGTERM], [15], [SIGTERM replacement])],
 	[[
 		#include <signal.h>
+	]]
+)
+
+dnl We emulate permissions in Windows
+AC_CHECK_HEADER(
+	[unistd.h],
+	,
+	[
+		AC_DEFINE([R_OK], [4], [R_OK replacement])
+		AC_DEFINE([W_OK], [2], [W_OK replacement])
+		AC_DEFINE([X_OK], [1], [X_OK replacement])
+		AC_DEFINE([F_OK], [0], [F_OK replacement])
+	]
+)
+
+AC_CHECK_DECL(
+	[S_IRUSR],
+	,
+	[AC_CHECK_DECL(
+		[_S_IREAD],
+		[AC_DEFINE([S_IRUSR], [_S_IREAD], [S_IRUSR replacement])],
+		[AC_MSG_ERROR([Could not find _S_IREAD.])],
+		[[
+			#include <sys/stat.h>
+		]]
+	)],
+	[[
+		#include <sys/stat.h>
+	]]
+)
+
+AC_CHECK_DECL(
+	[S_IWUSR],
+	,
+	[AC_CHECK_DECL(
+		[_S_IWRITE],
+		[AC_DEFINE([S_IWUSR], [_S_IWRITE], [S_IWUSR replacement])],
+		[AC_MSG_ERROR([Could not find _S_IWRITE.])],
+		[[
+			#include <sys/stat.h>
+		]]
+	)],
+	[[
+		#include <sys/stat.h>
+	]]
+)
+
+AC_CHECK_DECL(
+	[S_IRGRP],
+	,
+	[AC_CHECK_DECL(
+		[_S_IREAD],
+		[AC_DEFINE([S_IRGRP], [(_S_IREAD >> 3)], [_S_IREAD replacement])],
+		[AC_MSG_ERROR([Could not find _S_IREAD.])],
+		[[
+			#include <sys/stat.h>
+		]]
+	)],
+	[[
+		#include <sys/stat.h>
 	]]
 )
 
@@ -861,9 +984,10 @@ if test "${with_crypto_library}" = "openssl"; then
 		)
 	fi
 
-	AC_CHECK_FUNCS([SSL_CTX_new],
+	AC_CHECK_DECLS([SSL_CTX_new],
 				   ,
-				   [AC_MSG_ERROR([openssl check failed])]
+				   [AC_MSG_ERROR([openssl check failed])],
+				   [[#include <openssl/ssl.h>]]
 	)
 
 	if test "${with_openssl_engine}" = "auto"; then
@@ -883,25 +1007,27 @@ if test "${with_crypto_library}" = "openssl"; then
 				    [have_openssl_engine="no"]
 	    )
 	    if test "${have_openssl_engine}" = "yes"; then
-		AC_CHECK_FUNCS(
+		AC_CHECK_DECLS(
 		    [ \
 			ENGINE_load_builtin_engines \
 			ENGINE_register_all_complete \
 		    ],
 		    ,
-		    [have_openssl_engine="no"; break]
+		    [have_openssl_engine="no"; break],
+			[[#include <openssl/engine.h>]]
 		)
 	    fi
 	else
 	    have_openssl_engine="${with_openssl_engine}"
 	    if test "${have_openssl_engine}" = "yes"; then
-		AC_CHECK_FUNCS(
+		AC_CHECK_DECLS(
 		    [ \
 			ENGINE_load_builtin_engines \
 			ENGINE_register_all_complete \
 		    ],
 		    ,
-		    [AC_MSG_ERROR([OpenSSL engine support not found])]
+		    [AC_MSG_ERROR([OpenSSL engine support not found])],
+			[[#include <openssl/engine.h>]]
 		)
 	    fi
 	fi
@@ -909,10 +1035,11 @@ if test "${with_crypto_library}" = "openssl"; then
 		AC_DEFINE([HAVE_OPENSSL_ENGINE], [1], [OpenSSL engine support available])
 	fi
 
-	AC_CHECK_FUNC(
+	AC_CHECK_DECLS(
 		[EVP_aes_256_gcm],
 		,
-		[AC_MSG_ERROR([OpenSSL check for AES-256-GCM support failed])]
+		[AC_MSG_ERROR([OpenSSL check for AES-256-GCM support failed])],
+		[[#include <openssl/evp.h>]]
 	)
 
 	# All supported OpenSSL version (>= 1.0.2)
