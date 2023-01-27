@@ -286,6 +286,30 @@ AC_ARG_WITH(
 	[with_openssl_engine="auto"]
 )
 
+AC_ARG_WITH(
+	[tongsuo-engine],
+	[AS_HELP_STRING([--with-tongsuo-engine], [enable engine support with Tongsuo. Default enabled for OpenSSL < 3.0, auto,yes,no @<:@default=auto@:>@])],
+	[
+		case "${withval}" in
+			auto|yes|no) ;;
+			*) AC_MSG_ERROR([bad value ${withval} for --with-engine]) ;;
+		esac
+	],
+	[with_tongsuo_engine="auto"]
+)
+
+AC_ARG_WITH(
+	[tongsuo-ntls],
+	[AS_HELP_STRING([--with-tongsuo-ntls], [enable NTLS support with Tongsuo. Default enabled for NTLS is available, auto,yes,no @<:@default=auto@:>@])],
+	[
+		case "${withval}" in
+			auto|yes|no) ;;
+			*) AC_MSG_ERROR([bad value ${withval} for --with-ntls]) ;;
+		esac
+	],
+	[with_tongsuo_ntls="auto"]
+)
+
 AC_ARG_VAR([PLUGINDIR], [Path of plug-in directory @<:@default=LIBDIR/openvpn/plugins@:>@])
 if test -n "${PLUGINDIR}"; then
 	plugindir="${PLUGINDIR}"
@@ -1052,6 +1076,160 @@ if test "${with_crypto_library}" = "openssl"; then
 	AC_DEFINE([ENABLE_CRYPTO_OPENSSL], [1], [Use OpenSSL library])
 	CRYPTO_CFLAGS="${OPENSSL_CFLAGS}"
 	CRYPTO_LIBS="${OPENSSL_LIBS}"
+elif test "${with_crypto_library}" = "tongsuo"; then
+	AC_ARG_VAR([TONGSUO_CFLAGS], [C compiler flags for Tongsuo])
+	AC_ARG_VAR([TONGSUO_LIBS], [linker flags for Tongsuo])
+
+	if test -z "${TONGSUO_CFLAGS}" -a -z "${TONGSUO_LIBS}"; then
+		# if the user did not explicitly specify flags, try to autodetect
+		PKG_CHECK_MODULES(
+			[TONGSUO],
+			[tongsuo >= 8.3.2],
+			[have_tongsuo="yes"],
+			[] # If this fails, we will do another test next
+		)
+		TONGSUO_LIBS=${TONGSUO_LIBS:--lssl -lcrypto}
+	fi
+
+	saved_CFLAGS="${CFLAGS}"
+	saved_LIBS="${LIBS}"
+	CFLAGS="${CFLAGS} ${TONGSUO_CFLAGS}"
+	LIBS="${LIBS} ${TONGSUO_LIBS}"
+
+	# If pkgconfig check failed or TONGSUO_CFLAGS/TONGSUO_LIBS env vars
+	# are used, check the version directly in the Tongsuo include file
+	if test "${have_tongsuo}" != "yes"; then
+		AC_MSG_CHECKING([additionally if Tongsuo is available and version >= 8.3.2])
+		AC_COMPILE_IFELSE(
+			[AC_LANG_PROGRAM(
+				[[
+#include <openssl/opensslv.h>
+				]],
+				[[
+/*	     Version encoding: MNNFFPPS - see opensslv.h for details */
+#if BABASSL_VERSION_NUMBER < 0x8030200fL
+#error Tongsuo too old
+#endif
+				]]
+			)],
+			[AC_MSG_RESULT([ok])],
+			[AC_MSG_ERROR([Tongsuo version too old])]
+		)
+	fi
+
+	AC_CHECK_DECLS([SSL_CTX_new],
+				   ,
+				   [AC_MSG_ERROR([tongsuo check failed])],
+				   [[#include <openssl/ssl.h>]]
+	)
+
+	if test "${with_tongsuo_engine}" = "auto"; then
+	    AC_COMPILE_IFELSE(
+				    [AC_LANG_PROGRAM(
+					    [[
+	    #include <openssl/opensslv.h>
+					    ]],
+					    [[
+	    /*	     Version encoding: MNNFFPPS - see opensslv.h for details */
+	    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	    #error Engine supported disabled by default in OpenSSL 3.0+
+	    #endif
+					    ]]
+				    )],
+				    [have_tongsuo_engine="yes"],
+				    [have_tongsuo_engine="no"]
+	    )
+	    if test "${have_tongsuo_engine}" = "yes"; then
+		AC_CHECK_DECLS(
+		    [ \
+			ENGINE_load_builtin_engines \
+			ENGINE_register_all_complete \
+		    ],
+		    ,
+		    [have_tongsuo_engine="no"; break],
+			[[#include <openssl/engine.h>]]
+		)
+	    fi
+	else
+	    have_tongsuo_engine="${with_tongsuo_engine}"
+	    if test "${have_tongsuo_engine}" = "yes"; then
+		AC_CHECK_DECLS(
+		    [ \
+			ENGINE_load_builtin_engines \
+			ENGINE_register_all_complete \
+		    ],
+		    ,
+		    [AC_MSG_ERROR([Tongsuo engine support not found])],
+			[[#include <openssl/engine.h>]]
+		)
+	    fi
+	fi
+	if test "${have_tongsuo_engine}" = "yes"; then
+		AC_DEFINE([HAVE_TONGSUO_ENGINE], [1], [Tongsuo engine support available])
+	fi
+
+	if test "${with_tongsuo_ntls}" = "auto"; then
+	    AC_COMPILE_IFELSE(
+				    [AC_LANG_PROGRAM(
+					    [[
+	    #include <openssl/opensslconf.h>
+					    ]],
+					    [[
+	    #if defined (OPENSSL_NO_NTLS)
+	    #error Tongsuo NTLS support not found
+	    #endif
+					    ]]
+				    )],
+				    [have_tongsuo_ntls="yes"],
+				    [have_tongsuo_ntls="no"]
+	    )
+	    if test "${have_tongsuo_ntls}" = "yes"; then
+		AC_CHECK_DECLS(
+		    [SSL_CTX_enable_ntls],
+		    ,
+		    [have_tongsuo_ntls="no"; break],
+			[[#include <openssl/ssl.h>]]
+		)
+	    fi
+	else
+	    have_tongsuo_ntls="${with_tongsuo_ntls}"
+	    if test "${have_tongsuo_ntls}" = "yes"; then
+		AC_CHECK_DECLS(
+		    [SSL_CTX_enable_ntls],
+		    ,
+		    [AC_MSG_ERROR([Tongsuo NTLS support not found])],
+			[[#include <openssl/ssl.h>]]
+		)
+	    fi
+	fi
+	if test "${have_tongsuo_ntls}" = "yes"; then
+		AC_DEFINE([HAVE_TONGSUO_NTLS], [1], [Tongsuo NTLS support available])
+	fi
+
+	AC_CHECK_DECLS(
+		[EVP_aes_256_gcm],
+		,
+		[AC_MSG_ERROR([Tongsuo check for AES-256-GCM support failed])],
+		[[#include <openssl/evp.h>]]
+	)
+
+	AC_CHECK_DECLS(
+		[EVP_sm4_gcm],
+		,
+		[AC_MSG_ERROR([Tongsuo check for SM4-GCM support failed])],
+		[[#include <openssl/evp.h>]]
+	)
+
+	# All supported Tongsuo version (>= 8.3.2)
+	# have this feature
+	have_export_keying_material="yes"
+
+	CFLAGS="${saved_CFLAGS}"
+	LIBS="${saved_LIBS}"
+
+	AC_DEFINE([ENABLE_CRYPTO_TONGSUO], [1], [Use Tongsuo library])
+	CRYPTO_CFLAGS="${TONGSUO_CFLAGS}"
+	CRYPTO_LIBS="${TONGSUO_LIBS}"
 elif test "${with_crypto_library}" = "mbedtls"; then
 	AC_ARG_VAR([MBEDTLS_CFLAGS], [C compiler flags for mbedtls])
 	AC_ARG_VAR([MBEDTLS_LIBS], [linker flags for mbedtls])
@@ -1174,6 +1352,7 @@ elif test "${with_crypto_library}" = "wolfssl"; then
 
 	AC_DEFINE([ENABLE_CRYPTO_WOLFSSL], [1], [Use wolfSSL crypto library])
 	AC_DEFINE([ENABLE_CRYPTO_OPENSSL], [1], [Use wolfSSL openssl compatibility layer])
+	AC_DEFINE([ENABLE_CRYPTO_TONGSUO], [1], [Use wolfSSL tongsuo compatibility layer])
 	CRYPTO_CFLAGS="${WOLFSSL_CFLAGS}"
 	CRYPTO_LIBS="${WOLFSSL_LIBS}"
 else
@@ -1522,6 +1701,8 @@ AM_CONDITIONAL([ENABLE_PLUGIN_AUTH_PAM], [test "${enable_plugin_auth_pam}" = "ye
 AM_CONDITIONAL([ENABLE_PLUGIN_DOWN_ROOT], [test "${enable_plugin_down_root}" = "yes"])
 AM_CONDITIONAL([HAVE_LD_WRAP_SUPPORT], [test "${have_ld_wrap_support}" = "yes"])
 AM_CONDITIONAL([OPENSSL_ENGINE], [test "${have_openssl_engine}" = "yes"])
+AM_CONDITIONAL([TONGSUO_ENGINE], [test "${have_tongsuo_engine}" = "yes"])
+AM_CONDITIONAL([TONGSUO_NTLS], [test "${have_tongsuo_ntls}" = "yes"])
 
 sampledir="\$(docdir)/sample"
 AC_SUBST([plugindir])
