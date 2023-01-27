@@ -45,13 +45,13 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "The OpenVPN Project"
+            VALUE "CompanyName", "The GmVPN Project"
             VALUE "FileDescription", "Utility to manipulate TUN/TAP adapters on Windows"
             VALUE "FileVersion", PACKAGE_VERSION ".0"
-            VALUE "InternalName", "OpenVPN"
-            VALUE "LegalCopyright", "Copyright © The OpenVPN Project"
+            VALUE "InternalName", "GmVPN"
+            VALUE "LegalCopyright", "Copyright © The GmVPN Project"
             VALUE "OriginalFilename", "tapctl.exe"
-            VALUE "ProductName", "OpenVPN"
+            VALUE "ProductName", "GmVPN"
             VALUE "ProductVersion", PACKAGE_VERSION ".0"
         END
     END
@@ -61,4 +61,4 @@ BEGIN
     END
 END
 
-1 RT_MANIFEST "tapctl.exe.manifest"
+1 RT_MANIFEST "tapctl.manifest"

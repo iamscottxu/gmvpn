@@ -197,7 +197,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <Manifest Include="tapctl.exe.manifest" />
+    <Manifest Include="tapctl.manifest" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
