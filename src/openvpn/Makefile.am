@@ -36,9 +36,9 @@ if WIN32
 AM_CFLAGS += -municode -UUNICODE
 endif
 
-sbin_PROGRAMS = openvpn
+sbin_PROGRAMS = gmvpn
 
-openvpn_SOURCES = \
+gmvpn_SOURCES = \
 	argv.c argv.h \
 	auth_token.c auth_token.h \
 	base64.c base64.h \
@@ -148,7 +148,7 @@ openvpn_SOURCES = \
 	win32.h win32.c \
 	win32-util.h win32-util.c \
 	cryptoapi.h cryptoapi.c
-openvpn_LDADD = \
+gmvpn_LDADD = \
 	$(top_builddir)/src/compat/libcompat.la \
 	$(SOCKETS_LIBS) \
 	$(OPTIONAL_LZO_LIBS) \

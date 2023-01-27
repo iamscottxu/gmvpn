@@ -35,8 +35,8 @@ AM_CFLAGS = \
 	$(TAP_CFLAGS)
 
 if WIN32
-lib_LTLIBRARIES = libopenvpnmsica.la
-libopenvpnmsica_la_CFLAGS = \
+lib_LTLIBRARIES = libgmvpnmsica.la
+libgmvpnmsica_la_CFLAGS = \
 	-municode -D_UNICODE \
 	-UNTDDI_VERSION -U_WIN32_WINNT \
 	-D_WIN32_WINNT=_WIN32_WINNT_VISTA \
@@ -44,7 +44,7 @@ libopenvpnmsica_la_CFLAGS = \
 libgmvpnmsica_la_LDFLAGS = -luser32 -ladvapi32 -lole32 -lmsi -lsetupapi -liphlpapi -lshell32 -lshlwapi -lversion -lnewdev -no-undefined -avoid-version
 endif
 
-libopenvpnmsica_la_SOURCES = \
+libgmvpnmsica_la_SOURCES = \
 	dllmain.c \
 	msiex.c msiex.h \
 	msica_arg.c msica_arg.h \

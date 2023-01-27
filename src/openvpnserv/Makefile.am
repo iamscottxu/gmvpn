@@ -20,15 +20,15 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/include -I$(top_srcdir)/src/openvpn -I$(top_srcdir)/src/compat
 
 if WIN32
-sbin_PROGRAMS = openvpnserv
-openvpnserv_CFLAGS = \
+sbin_PROGRAMS = gmvpnserv
+gmvpnserv_CFLAGS = \
 	-municode -D_UNICODE \
 	-UNTDDI_VERSION -U_WIN32_WINNT \
 	-D_WIN32_WINNT=_WIN32_WINNT_VISTA
 gmvpnserv_LDADD = -ladvapi32 -luserenv -liphlpapi -lfwpuclnt -lrpcrt4 -lshlwapi -lnetapi32 -lws2_32 -lntdll -lshell32
 endif
 
-openvpnserv_SOURCES = \
+gmvpnserv_SOURCES = \
         common.c \
 	interactive.c \
 	service.c service.h \
