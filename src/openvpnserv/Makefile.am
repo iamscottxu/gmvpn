@@ -36,3 +36,8 @@ openvpnserv_SOURCES = \
 	$(top_srcdir)/src/openvpn/block_dns.c $(top_srcdir)/src/openvpn/block_dns.h \
 	openvpnserv_resources.rc \
 	$(top_srcdir)/src/openvpn/ring_buffer.h
+
+if WIN32
+.rc.obj:
+	$(RCCOMPILE) -i "$<" -o "$@"
+endif

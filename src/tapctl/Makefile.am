@@ -48,3 +48,8 @@ tapctl_SOURCES = \
 	main.c \
 	tap.c tap.h \
 	tapctl_resources.rc
+
+if WIN32
+.rc.obj:
+	$(RCCOMPILE) -i "$<" -o "$@"
+endif
